@@ -1,0 +1,8 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+
+PROJECT(SWIFF)
+ADD_SUBDIRECTORY(base)
+
+SET(CMAKE_C_FLAGS "-std=c99 -Werror -Wall -Wextra -Wno-unused-function")
+
+ENABLE_TESTING()
