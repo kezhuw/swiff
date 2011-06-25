@@ -10,3 +10,7 @@ ADD_TEST(logger_test ${TEST_BINARY_DIR}/logger_test.out)
 SET(REPORT_MODULE_SOURCE_FILES report.c ${LOGGER_MODULE_SOURCE_FILES})
 ADD_EXECUTABLE(report_test.out report_test.c ${REPORT_MODULE_SOURCE_FILES})
 ADD_TEST(report_test ${TEST_BINARY_DIR}/report_test.out)
+
+SET(EXCEPT_MODULE_SOURCE_FILES except.c ${REPORT_MODULE_SOURCE_FILES})
+ADD_EXECUTABLE(except_test.out except_test.c ${EXCEPT_MODULE_SOURCE_FILES})
+ADD_TEST(except_test ${TEST_BINARY_DIR}/except_test.out)
