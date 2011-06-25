@@ -14,3 +14,7 @@ ADD_TEST(report_test ${TEST_BINARY_DIR}/report_test.out)
 SET(EXCEPT_MODULE_SOURCE_FILES except.c ${REPORT_MODULE_SOURCE_FILES})
 ADD_EXECUTABLE(except_test.out except_test.c ${EXCEPT_MODULE_SOURCE_FILES})
 ADD_TEST(except_test ${TEST_BINARY_DIR}/except_test.out)
+
+SET(ASSERT_MODULE_SOURCE_FILES assert.c ${EXCEPT_MODULE_SOURCE_FILES})
+ADD_EXECUTABLE(assert_test.out assert_test.c ${ASSERT_MODULE_SOURCE_FILES})
+ADD_TEST(assert_test ${TEST_BINARY_DIR}/assert_test.out)
