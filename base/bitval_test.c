@@ -70,7 +70,7 @@ bitval_test_integer(const char *name, const uint8_t *data, size_t size, uint32_t
 	printf("bitval_test_integer[%s], start.\n", name);
 
 	struct bitval *b = (struct bitval *)bdata;
-	bitval_init(b, data, size, bitval_throw_error);	assert(bitval_ensure_bytes(b, size));
+	bitval_init(b, (ubyte1_t *)data, size, bitval_throw_error);assert(bitval_ensure_bytes(b, size));
 	val = (uint32_t)bitval_peek_bit(b);		assert(val == results[0]);
 	val = (uint32_t)bitval_read_bit(b);		assert(val == results[0]);
 	val = (uint32_t)bitval_peek_sbits(b, 5);	assert(val == results[1]);
@@ -157,7 +157,7 @@ bitval_test_string(const char *name, const char *data, size_t size, const char *
 	struct bitval *b = malloc(bitval_size());
 	struct bitval *b1 = malloc(bitval_size());
 
-	bitval_init(b, data, size, bitval_throw_error);
+	bitval_init(b, (ubyte1_t *)data, size, bitval_throw_error);
 	bitval_copy(b1, b);
 
 	const char *str;
@@ -181,11 +181,11 @@ bitval_test_string(const char *name, const char *data, size_t size, const char *
 }
 
 static void
-bitval_test_error(const char *name, const ubyte1_t *data, size_t size) {
-	printf("bitval_test_error, start.\n");
+bitval_test_error(const char *name, const void *data, size_t size) {
+	printf("bitval_test_error[%s], start.\n", name);
 	struct bitval *b = malloc(bitval_size());
 
-	bitval_init(b, data, size, bitval_throw_error);
+	bitval_init(b, (ubyte1_t *)data, size, bitval_throw_error);
 
 	BEGIN_EXCEPT {
 		bitval_skip_bytes(b, (size_t)-1);
@@ -222,7 +222,7 @@ bitval_test_error(const char *name, const ubyte1_t *data, size_t size) {
 	ENDUP_EXCEPT;
 
 	free(b);
-	printf("bitval_test_error, done.\n");
+	printf("bitval_test_error[%s], done.\n", name);
 }
 
 int
