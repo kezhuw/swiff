@@ -120,34 +120,45 @@ read_bigendian_ubyte4_h4(const ubyte1_t *ptr) {
 	return read_bigendian_ubyte4(ptr);
 }
 
-static bool
-_bitval_synced(const struct _bitval *_bv) {
-	return (_bv->num == 0);
-}
-
-static size_t
+static inline size_t
 _bitval_remain_bytes(const struct _bitval *_bv) {
 	return (_bv->cnt - (size_t)(_bv->ptr-_bv->beg));
 }
 
-static size_t
+static inline size_t
 _bitval_number_bits(const struct _bitval *_bv) {
 	return (size_t)(_bv->num + _bitval_remain_bytes(_bv)*CHAR_BIT);
 }
 
-static bool
-_bitval_ensure_bits(const struct _bitval *_bv, size_t n) {
-	return (_bitval_number_bits(_bv) >= n);
-}
-
-static size_t
+static inline size_t
 _bitval_number_bytes(const struct _bitval *_bv) {
 	return (size_t)(_bv->num/CHAR_BIT + _bitval_remain_bytes(_bv));
 }
 
-static bool
+static inline bool
+_bitval_ensure_bits(const struct _bitval *_bv, size_t n) {
+	return (_bitval_number_bits(_bv) >= n);
+}
+
+static inline void
+_bitval_assert_bits(const struct _bitval *_bv, size_t n) {
+	if (!_bitval_ensure_bits(_bv, n) && _bv->err != NULL) {
+		_bv->err(BitvalStrerrOutOfBound);
+	}
+	assert(_bitval_ensure_bits(_bv, n));
+}
+
+static inline bool
 _bitval_ensure_bytes(const struct _bitval *_bv, size_t n) {
 	return (_bitval_number_bytes(_bv) >= n);
+}
+
+static inline void
+_bitval_assert_bytes(const struct _bitval *_bv, size_t n) {
+	if (!_bitval_ensure_bytes(_bv, n) && _bv->err != NULL) {
+		_bv->err(BitvalStrerrOutOfBound);
+	}
+	assert(_bitval_ensure_bytes(_bv, n));
 }
 
 static inline bool
@@ -160,27 +171,16 @@ _bitval_ensure_bound(const struct _bitval *_bv, long n) {
 }
 
 static inline void
-_bitval_assert_bits(const struct _bitval *_bv, size_t n) {
-	if (!_bitval_ensure_bits(_bv, n) && _bv->err != NULL) {
-		_bv->err(BitvalStrerrOutOfBound);
-	}
-	assert(_bitval_ensure_bits(_bv, n));
-}
-
-static inline void
-_bitval_assert_bytes(const struct _bitval *_bv, size_t n) {
-	if (!_bitval_ensure_bytes(_bv, n) && _bv->err != NULL) {
-		_bv->err(BitvalStrerrOutOfBound);
-	}
-	assert(_bitval_ensure_bytes(_bv, n));
-}
-
-static inline void
 _bitval_assert_bound(const struct _bitval *_bv, long n) {
 	if (!_bitval_ensure_bound(_bv, n) && _bv->err != NULL) {
 		_bv->err(BitvalStrerrOutOfBound);
 	}
 	assert(_bitval_ensure_bound(_bv, n));
+}
+
+static inline bool
+_bitval_synced(const struct _bitval *_bv) {
+	return (_bv->num == 0);
 }
 
 static inline void
