@@ -16,7 +16,7 @@ struct _bitval {
 	number_t num;		// Number of valid bits in buf.
 	const ubyte1_t *ptr;
 	const ubyte1_t *beg;
-	const ubyte1_t *end;
+	size_t cnt;
 	BitvalErrorFunc_t err;
 };
 
@@ -126,8 +126,13 @@ _bitval_synced(const struct _bitval *_bv) {
 }
 
 static size_t
+_bitval_remain_bytes(const struct _bitval *_bv) {
+	return (_bv->cnt - (size_t)(_bv->ptr-_bv->beg));
+}
+
+static size_t
 _bitval_number_bits(const struct _bitval *_bv) {
-	return (size_t)(_bv->num + (_bv->end-_bv->ptr)*CHAR_BIT);
+	return (size_t)(_bv->num + _bitval_remain_bytes(_bv)*CHAR_BIT);
 }
 
 static bool
@@ -137,7 +142,7 @@ _bitval_ensure_bits(const struct _bitval *_bv, size_t n) {
 
 static size_t
 _bitval_number_bytes(const struct _bitval *_bv) {
-	return (size_t)(_bv->num/CHAR_BIT + (_bv->end-_bv->ptr));
+	return (size_t)(_bv->num/CHAR_BIT + _bitval_remain_bytes(_bv));
 }
 
 static bool
@@ -182,7 +187,7 @@ static void
 _bitval_fill_hibuf(struct _bitval *_bv) {
 	ubyte4_t val;
 	number_t num;
-	switch (_bv->end - _bv->ptr) {
+	switch (_bitval_remain_bytes(_bv)) {
 	case 0:
 		val = 0;
 		num = 0;
@@ -245,7 +250,7 @@ bitval_init(bitval_t bv, const ubyte1_t *data, size_t size, BitvalErrorFunc_t er
 	struct _bitval *_bv = (struct _bitval *)bv;
 	_bv->buf = _bv->num = 0;
 	_bv->beg = _bv->ptr = data;
-	_bv->end = data + size;
+	_bv->cnt = size;
 	_bv->err = err;
 }
 
@@ -437,7 +442,7 @@ bitval_read_string(bitval_t bv, size_t *lenp) {
 	assert(bv != NULL && lenp != NULL);
 	struct _bitval *_bv = (struct _bitval *)bv;
 	_bitval_assert_synced(_bv);
-	char *end = memchr(_bv->ptr, '\0', _bv->end-_bv->ptr);
+	char *end = memchr(_bv->ptr, '\0', _bitval_remain_bytes(_bv));
 	if (end != NULL) {
 		*lenp = (size_t)(end - (char *)_bv->ptr);
 
