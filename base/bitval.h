@@ -58,6 +58,7 @@ bool bitval_synced(const bitval_t bv);
 
 void bitval_skip_bits(bitval_t bv, size_t n);
 void bitval_skip_bytes(bitval_t bv, size_t n);
+void bitval_jump_bytes(bitval_t bv, long n);
 
 size_t bitval_number_bits(const bitval_t bv);
 size_t bitval_number_bytes(const bitval_t bv);

@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#define BitvalStrerrNoEnoughData	"Bitval:{no enough data}"
+#define BitvalStrerrOutOfBound		"Bitval:{out of bound}"
 #define BitvalStrerrUnaligned		"Bitval:{unaligned data}"
 #define BitvalStrerrInvalidBitwidth	"Bitval:{invalid bitwidth}"
 
@@ -150,10 +150,19 @@ _bitval_ensure_bytes(const struct _bitval *_bv, size_t n) {
 	return (_bitval_number_bytes(_bv) >= n);
 }
 
+static inline bool
+_bitval_ensure_bound(const struct _bitval *_bv, long n) {
+	if (n >= 0) {
+		return _bitval_ensure_bytes(_bv, (size_t)n);
+	} else {
+		return _bv->ptr+n >= _bv->beg;
+	}
+}
+
 static inline void
 _bitval_assert_bits(const struct _bitval *_bv, size_t n) {
 	if (!_bitval_ensure_bits(_bv, n) && _bv->err != NULL) {
-		_bv->err(BitvalStrerrNoEnoughData);
+		_bv->err(BitvalStrerrOutOfBound);
 	}
 	assert(_bitval_ensure_bits(_bv, n));
 }
@@ -161,9 +170,17 @@ _bitval_assert_bits(const struct _bitval *_bv, size_t n) {
 static inline void
 _bitval_assert_bytes(const struct _bitval *_bv, size_t n) {
 	if (!_bitval_ensure_bytes(_bv, n) && _bv->err != NULL) {
-		_bv->err(BitvalStrerrNoEnoughData);
+		_bv->err(BitvalStrerrOutOfBound);
 	}
 	assert(_bitval_ensure_bytes(_bv, n));
+}
+
+static inline void
+_bitval_assert_bound(const struct _bitval *_bv, long n) {
+	if (!_bitval_ensure_bound(_bv, n) && _bv->err != NULL) {
+		_bv->err(BitvalStrerrOutOfBound);
+	}
+	assert(_bitval_ensure_bound(_bv, n));
 }
 
 static inline void
@@ -309,6 +326,15 @@ bitval_skip_bytes(bitval_t bv, size_t n) {
 	struct _bitval *_bv = (struct _bitval *)bv;
 	_bitval_assert_synced(_bv);
 	_bitval_assert_bytes(_bv, n);
+	_bv->ptr += n;
+}
+
+void
+bitval_jump_bytes(bitval_t bv, long n) {
+	assert(bv != NULL);
+	struct _bitval *_bv = (struct _bitval *)bv;
+	_bitval_assert_synced(_bv);
+	_bitval_assert_bound(_bv, n);
 	_bv->ptr += n;
 }
 
