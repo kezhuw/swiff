@@ -290,13 +290,11 @@ mscope_alloc_local(mscope_t mo, size_t size) {
 	struct _mscope *_mo = (struct _mscope *)mo;
 	return _mscope_alloc_local(_mo, size);
 }
-#include <stdio.h>
+
 void *
 mscope_alloc_global(mscope_t mo, size_t size) {
-	printf("{alloc_global:{%zd}.\n", size);
 	size = align_size(size);
 	struct _mscope *_mo = (struct _mscope *)mo;
 	void *ptr = _mscope_alloc_global(_mo, size);
-	printf("}}}}}}.\n");
 	return ptr;
 }
