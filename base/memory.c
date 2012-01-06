@@ -1,47 +1,61 @@
 #include "memory.h"
-#include "except.h"
-#include "report.h"
 #include "multip.h"
+#include "helper.h"
 #include <stddef.h>
+#include <string.h>
 #include <stdbool.h>
 
-const Exception_t ExceptionMemory = except_define("Memory error");
-
-#define mmstat_define(ptr, size, func, file, line)	(&(const struct mmstat) {ptr, size, func, file, line})
-struct mmstat {
+#define mmstat_define(ptr, size, file, line)		(&(const struct meminf) {ptr, size, file, line})
+struct meminf {
 	const void *ptr;
 	size_t size;
-	const char *func;
 	const char *file;
 	int line;
 };
 
-static size_t Statn;
-static struct mmstat *Stats;
-
-static size_t MemorySize;
-static size_t MstatsSize;
+struct _memory {
+	struct memface iface;
+	struct memface mface[1];
+	struct logface lface[1];
+	struct errface eface[1];
+	size_t memsize;
+	size_t imeminf;
+	size_t nmeminf;
+	struct meminf *meminfs;
+};
 
 static inline bool
-mmstat_expand(void) {
-	if (((Statn+1) ^ Statn) > Statn) {
-		void *data = realloc(Stats, sizeof(struct mmstat) * (2*Statn + 1));
+_expand_meminf(struct _memory *_mm) {
+	size_t n = _mm->nmeminf;
+	if (_mm->imeminf == _mm->nmeminf) {
+		struct memface *mc = _mm->mface;
+		size_t newsize = (2*n + 1) * sizeof(struct meminf);
+		void *data = NULL;
+		if (mc->realloc == NULL) {
+			data = mc->alloc(mc->ctx, newsize, __FILE__, __LINE__);
+			if (data != NULL) {
+				memcpy(data, _mm->meminfs, n*sizeof(struct meminf));
+				mc->dealloc(mc->ctx, _mm->meminfs, __FILE__, __LINE__);
+			}
+		} else {
+			data = mc->realloc(mc->ctx, _mm->meminfs, newsize, __FILE__, __LINE__);
+		}
 		if (data == NULL) {
 			return false;
 		}
-		Stats = data;
-		MstatsSize = sizeof(struct mmstat) *(2*Statn + 1);
+		_mm->nmeminf = 2*n + 1;
+		_mm->meminfs = data;
 	}
 	return true;
 }
 
-// *st valid until  mmstat_insert()/mmstat_delete().
+// *mi valid until _insert_meminf()/_delete_meminf().
 static bool
-mmstat_search(const void *ptr, struct mmstat **st) {
-	assert(st != NULL);
-	for (size_t i=0; i<Statn; i++) {
-		if (Stats[i].ptr == ptr) {
-			*st = &Stats[i];
+_search_meminf(struct _memory *_mm, const void *ptr, struct meminf **mi) {
+	assert(mi != NULL);
+	for (size_t i=0, n=_mm->imeminf; i<n; i++) {
+		if (_mm->meminfs[i].ptr == ptr) {
+			*mi = &_mm->meminfs[i];
 			return true;
 		}
 	}
@@ -49,185 +63,201 @@ mmstat_search(const void *ptr, struct mmstat **st) {
 }
 
 static inline bool
-mmstat_insert(const struct mmstat *st) {
-	if (!mmstat_expand()) {
+_insert_meminf(struct _memory *_mm, const struct meminf *mi) {
+	if (!_expand_meminf(_mm)) {
 		return false;
 	}
-	Stats[Statn++] = *st;
+	_mm->meminfs[_mm->imeminf++] = *mi;
 	return true;
 }
 
-// Ensure *st is returned by mmstat_search(), and there is no mmstat_insert()
-// or/and mmstat_delete() invokes between mmstat_update() and mmstat_search().
+// Ensure *mi is returned by _search_meminf(), and there is no _insert_meminf()/
+// _delete_meminf() between _update_meminf() and _search_meminf().
 static inline void
-mmstat_update(struct mmstat *st, const struct mmstat *ch) {
-	assert(st >= Stats && st < Stats+Statn);
-	*st = *ch;
+_update_meminf(struct _memory *_mm, struct meminf *mi, const struct meminf *ch) {
+	assert(mi >= _mm->meminfs && mi < _mm->meminfs+_mm->imeminf);
+	(void)_mm;
+	*mi = *ch;
 }
 
 static inline void
-mmstat_delete(struct mmstat *st) {
-	assert(Statn > 0);
-	assert(st >= Stats && st < Stats+Statn);
+_delete_meminf(struct _memory *_mm, struct meminf *mi) {
+	assert(_mm->imeminf > 0);
+	assert(mi >= _mm->meminfs && mi < _mm->meminfs+_mm->imeminf);
 
-	Statn--;
-	memmove(st, st+1, (&Stats[Statn] - st) * sizeof(struct mmstat));
+	_mm->imeminf--;
+	memmove(mi, mi+1, (&_mm->meminfs[_mm->imeminf] - mi) * sizeof(struct meminf));
 }
 
-static inline void
-mmstat_deinit(void (*dealloc)(void *)) {
-	struct mmstat * restrict ss = Stats;
-	for (size_t i=0; i<Statn; i++) {
-		dealloc((void *)ss[i].ptr);
+// If fails, dealloc() ptr and return NULL.
+void *
+_insert_newptr(struct _memory *_mm, void *ptr, size_t size, const char *file, int line) {
+	const struct meminf *mi = mmstat_define(ptr, size, file, line);
+	if (!_insert_meminf(_mm, mi)) {
+		struct memface *mc = _mm->mface;
+		mc->dealloc(mc->ctx, ptr, __FILE__, __LINE__);
+		ptr = NULL;
+	} else {
+		_mm->memsize += size;
 	}
-
-	free(Stats);
-	Statn = 0;
-	Stats = NULL;
-	MstatsSize = 0;
-}
-
-static inline size_t
-mmstat_mmsize(const struct mmstat *st) {
-	return st->size;
-}
-
-static inline size_t
-mmstat_amount(void) {
-	return MstatsSize;
+	return ptr;
 }
 
 size_t
-memory_amount(void) {
-#ifdef MEMORY_STATS_SUPPORT
-	return MemorySize;
-#endif
-	return (size_t)-1;
-}
-
-static inline int
-mmstat_report(const struct mmstat *st, const char *msg, const char *func, const char *file, int line) {
-	return report_print(ReportLevelReport, func, file, line, "Memory:{%s: memory %p size %zu, allocated at function %s file %s line %d.}\n",
-			msg, st->ptr, st->size, st->func, st->file, st->line);
+memory_amount(memory_t mm) {
+	struct _memory *_mm = (struct _memory *)mm;
+	return _mm->memsize;
 }
 
 int
-(memory_report)(const void *ptr, const char *msg, const char *func, const char *file, int line) {
-#ifdef MEMORY_STATS_SUPPORT
-	struct mmstat *st;
-	if (mmstat_search(ptr, &st)) {
-		return mmstat_report(st, msg, func, file, line);
+memory_report(memory_t mm, const void *ptr, const char *msg) {
+	struct _memory *_mm = (struct _memory *)mm;
+	struct meminf *mi;
+	if (_search_meminf(_mm, ptr, &mi)) {
+		struct logface *lc = _mm->lface;
+		return lc->log(lc->ctx, "%s: memory %p, size %zu, allocated at %s file %d line.\n", msg, mi->ptr, mi->size, mi->file, mi->line);
+	} else {
+		struct errface *ec = _mm->eface;
+		return ec->err(ec->ctx, "%s: invalid memory address %p.\n", msg, ptr);
 	}
-	return 0;
-#else
-	return report_print(ReportLevelReport, func, file, line, "Memory:{%s: memory %p.}\n", msg, ptr);
-#endif
 }
 
 int
-memory_status(char *status, size_t size) {
-	return snprintf(status, size, "Memory:{Memory status: %zu bytes allocated by clients, %zu bytes used by memory module itself.}", memory_amount(), mmstat_amount());
+memory_status(memory_t mm) {
+	struct _memory *_mm = (struct _memory *)mm;
+	struct logface *lc = _mm->lface;
+	return lc->log(lc->ctx, "Memory status: %zu bytes allocated by clients, %zu bytes used by memory module.\n", _mm->memsize, _mm->nmeminf * sizeof(struct meminf));
 }
 
-#undef memory_alloc
-#undef memory_zalloc
-#undef memory_realloc
-#undef memory_dealloc
-
-// C99 malloc(0)
-// If the size of the space requested is zero, the behavior is implementation-defined:
-// either a null pointer is returned, or the behavior is as if the size were some nonzero value,
-// except that the returned pointer shall not be used to access no object.
 void *
-memory_alloc(size_t size, const char *func, const char *file, int line) {
-	void *ptr = malloc(size);
-#ifdef MEMORY_STATS_SUPPORT
+memory_alloc(memory_t mm, size_t size, const char *file, int line) {
+	struct _memory *_mm = (struct _memory *)mm;
+	struct memface *mc = _mm->mface;
+	void *ptr = mc->alloc(mc->ctx, size, __FILE__, __LINE__);
 	if (ptr != NULL) {
-		if (!mmstat_insert(mmstat_define(ptr, size, func, file, line))) {
-			free(ptr);
-			ptr = NULL;
-		}
-		else {
-			MemorySize += size;
-		}
+		ptr = _insert_newptr(_mm, ptr, size, file, line);
 	}
-#endif
 	return ptr;
 }
 
 void *
-memory_zalloc(size_t size, const char *func, const char *file, int line) {
-	void *ptr = memory_alloc(size, file, func, line);
-	if (ptr != NULL) {
-		memset(ptr, 0, size);
+memory_zalloc(memory_t mm, size_t size, const char *file, int line) {
+	struct _memory *_mm = (struct _memory *)mm;
+	struct memface *mc = _mm->mface;
+	if (mc->zalloc != NULL) {
+		void *ptr = mc->zalloc(mc->ctx, size, __FILE__, __LINE__);
+		if (ptr != NULL) {
+			ptr = _insert_newptr(_mm, ptr, size, file, line);
+		}
+		return ptr;
+	} else {
+		void *ptr = memory_alloc(mm, size, file, line);
+		if (ptr != NULL) {
+			memset(ptr, 0, size);
+		}
+		return ptr;
 	}
-	return ptr;
 }
 
-// Invoke realloc() directly to reserve	implementation-defined behavior of realloc.
 void *
-memory_realloc(void *ptr, size_t size, const char *func, const char *file, int line) {
-#ifdef MEMORY_STATS_SUPPORT
-	struct mmstat *st;
-	if (ptr != NULL && !mmstat_search(ptr, &st)) {
-		(except_throw)(ExceptionMemory, "invalid memory address", func, file, line);
+memory_realloc(memory_t mm, void *ptr, size_t size, const char *file, int line) {
+	if (ptr == NULL) {
+		return memory_alloc(mm, size, file, line);
 	}
-#endif
-	void *ret = realloc(ptr, size);
-#ifdef MEMORY_STATS_SUPPORT
+	struct _memory *_mm = (struct _memory *)mm;
+	struct meminf *mi;
+	if (!_search_meminf(_mm, ptr, &mi)) {
+		struct errface *ec = _mm->eface;
+		ec->err(ec->ctx, "memory reallocation: invalid memory address %p, reallocated at %s file %d line.\n", ptr, file, line);
+		abort();
+		return NULL;
+	}
+	struct memface *mc = _mm->mface;
+	if (mc->realloc == NULL) {
+		void *ret = ptr;
+		size_t oldsize = mi->size;
+		if (size > oldsize || size < oldsize/2) {
+			ret = memory_alloc(mm, size, file, line);
+			if (ret != NULL) {
+				size_t minsize = oldsize<size ? oldsize : size;
+				memcpy(ret, ptr, minsize);
+				memory_dealloc(mm, ptr, file, line);
+			}
+		}
+		return ret;
+	}
+
+	void *ret = mc->realloc(mc, ptr, size, __FILE__, __LINE__);
 	if (ret == NULL) {
-		if (size == 0 && ptr != NULL) {
-			MemorySize -= mmstat_mmsize(st);
-			mmstat_delete(st);
+		if (size == 0) {
+			_mm->memsize -= mi->size;
+			_delete_meminf(_mm, mi);
 		}
+	} else {
+		const struct meminf *re = mmstat_define(ret, size, file, line);
+		_mm->memsize += size;
+		_mm->memsize -= mi->size;
+		_update_meminf(_mm, mi, re);
 	}
-	else {
-		const struct mmstat *re = mmstat_define(ret, size, func, file, line);
-		if (ptr == NULL) {
-			if (!mmstat_insert(re)) {
-				free(ret);
-				ret = NULL;
-			}
-			else {
-				MemorySize += size;
-			}
-		}
-		else {
-			MemorySize += size;
-			MemorySize -= mmstat_mmsize(st);
-			mmstat_update(st, re);
-		}
-	}
-#endif
 	return ret;
 }
 
 void
-memory_dealloc(void *ptr, const char *func, const char *file, int line) {
-#ifdef MEMORY_STATS_SUPPORT
+memory_dealloc(memory_t mm, void *ptr, const char *file, int line) {
+	struct _memory *_mm = (struct _memory *)mm;
 	if (ptr != NULL) {
-		struct mmstat *st;
-		if (!mmstat_search(ptr, &st)) {
-			(except_throw)(ExceptionMemory, "invalid memory address", func, file, line);
+		struct meminf *mi;
+		if (!_search_meminf(_mm, ptr, &mi)) {
+			struct errface *ec = _mm->eface;
+			ec->err(ec->ctx, "memory deallocation: invalid memory address %p, deallocated at %s file %d line.\n", ptr, file, line);
+			abort();
 			return;
 		}
-		MemorySize -= mmstat_mmsize(st);
-		mmstat_delete(st);
+		_mm->memsize -= mi->size;
+		_delete_meminf(_mm, mi);
 	}
-#endif
-	free(ptr);
+	struct memface *mc = _mm->mface;
+	mc->dealloc(mc, ptr, __FILE__, __LINE__);
 }
 
-static void
-memory_leak(void *ptr) {
-	memory_report(ptr, "Memory leak");
-	free(ptr);
+struct memface *
+memory_init(memory_t mm, const struct memface *mc, const struct logface *lc, const struct errface *ec) {
+	assert(mc != NULL);
+	assert(lc != NULL);
+	assert(ec != NULL);
+	assert(mc->alloc != NULL && mc->dealloc != NULL);
+	assert(lc->log != NULL);
+	assert(ec->err != NULL);
+	struct _memory *_mm = (struct _memory *)mm;
+	_mm->mface[0] = *mc;
+	_mm->lface[0] = *lc;
+	_mm->eface[0] = *ec;
+	_mm->memsize = 0;
+	_mm->imeminf = _mm->nmeminf = 0;
+	_mm->meminfs = NULL;
+	struct memface *m = &_mm->iface;
+	m->ctx = mm;
+	m->alloc = (MemfaceAllocFunc_t)memory_alloc;
+	m->zalloc = (MemfaceAllocFunc_t)memory_zalloc;
+	m->realloc = (MemfaceReallocFunc_t)memory_realloc;
+	m->dealloc = (MemfaceDeallocFunc_t)memory_dealloc;
+	return m;
 }
 
 void
-memory_fini(void) {
-#ifdef MEMORY_STATS_SUPPORT
-	mmstat_deinit(memory_leak);
-	MemorySize = 0;
-#endif
+memory_fini(memory_t mm) {
+	struct _memory *_mm = (struct _memory *)mm;
+	struct memface *mc = _mm->mface;
+	struct logface *lc = _mm->lface;
+	MemfaceDeallocFunc_t dealloc = mc->dealloc;
+	for (size_t i=0; i<_mm->imeminf; i++) {
+		struct meminf *mi = _mm->meminfs+i;
+		dealloc(mc->ctx, (void *)mi->ptr, __FILE__, __LINE__);
+		lc->log(lc->ctx, "memory non-deallocted: memory %p, size %zu, allocated at %s file %d line.\n", mi->ptr, mi->size, mi->file, mi->line);
+	}
+	dealloc(mc->ctx, _mm->meminfs, __FILE__, __LINE__);
+	_mm->imeminf = _mm->nmeminf = 0;
+	_mm->meminfs = NULL;
+	_mm->memsize = 0;
 }
+

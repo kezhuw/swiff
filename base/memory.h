@@ -2,31 +2,33 @@
 #define __MEMORY_H
 
 #include "except.h"
+#include "helper.h"
 #include <stddef.h>
 
-extern const Exception_t ExceptionMemory;
+typedef struct {
+	struct memface _1[2];
+	struct logface _2[1];
+	struct errface _3[1];
+	void *_[10];
+} memory_t[1];
 
-// Convenient macros make they similar to standant malloc API.
-//
-// Same constrains to standand malloc API, except that when ptr to
-// realloc/memory_dealloc is invalid, ExceptionMemory will be thrown.
-#define memory_alloc(size)		((memory_alloc)((size), __func__, __FILE__, __LINE__))
-#define memory_zalloc(size)		((memory_zalloc)((size), __func__, __FILE__, __LINE__))
-#define memory_realloc(ptr, size)	((memory_realloc)((ptr), (size), __func__, __FILE__, __LINE__))
-#define memory_dealloc(ptr)		((memory_dealloc)((ptr), __func__, __FILE__, __LINE__))
+// Arguments mc, lc, ec must be valid memface, logface, errface, respectively.
+// After init(), mm is a valid memface with all functions implemented.
+struct memface *memory_init(memory_t mm, const struct memface *mc, const struct logface *lc, const struct errface *ec);
+// If there are memories alive when fini(), we dealloc() and log() it.
+void memory_fini(memory_t mm);
 
-#define memory_report(ptr, msg)		((memory_report)(ptr, msg, __func__, __FILE__, __LINE__))
+size_t memory_amount(memory_t mm);
+// Log() memory utilization.
+int memory_status(memory_t mm);
+// Log() about ptr, err() if ptr is invalid.
+int memory_report(memory_t mm, const void *ptr, const char *msg);
 
-size_t memory_amount(void);
-// Write current memory status to 'status' parameter.
-int memory_status(char *status, size_t size);
-int (memory_report)(const void *ptr, const char *msg, const char *func, const char *file, int line);
-
-void *(memory_alloc)(size_t size, const char *func, const char *file, int line);
-void *(memory_zalloc)(size_t size, const char *func, const char *file, int line);
-void *(memory_realloc)(void *ptr, size_t size, const char *func, const char *file, int line);
-void (memory_dealloc)(void *ptr, const char *func, const char *file, int line);
-
-void memory_fini(void);
+void *memory_alloc(memory_t mm, size_t size, const char *file, int line);
+void *memory_zalloc(memory_t mm, size_t size, const char *file, int line);
+// If argument ptr to realloc/dealloc isn't returned by memface mm,
+// err() this and then abort().
+void *memory_realloc(memory_t mm, void *ptr, size_t size, const char *file, int line);
+void memory_dealloc(memory_t mm, void *ptr, const char *file, int line);
 
 #endif

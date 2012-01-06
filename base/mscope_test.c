@@ -2,6 +2,7 @@
 #include "memory.h"
 #include <stdio.h>
 #include <assert.h>
+#include <stdlib.h>
 
 static void
 mscope_test_global(mscope_t mo) {
@@ -48,13 +49,13 @@ mscope_test_local(mscope_t mo) {
 static void *
 alloc(void *ctx, size_t size) {
 	(void)ctx;
-	return memory_alloc(size);
+	return malloc(size);
 }
 
 static void
 dealloc(void *ctx, void *ptr) {
 	(void)ctx;
-	memory_dealloc(ptr);
+	free(ptr);
 }
 
 static void
@@ -88,8 +89,6 @@ main(void) {
 	printf("Test mscope, start.\n");
 	mscope_test();
 	printf("Test mscope, done.\n");
-
-	memory_fini();
 
 	return 0;
 }
