@@ -1,5 +1,4 @@
 #include "mscope.h"
-#include "memory.h"
 #include "helper.h"
 #include <assert.h>
 #include <stddef.h>
@@ -161,6 +160,7 @@ _mscope_alloc_global(struct _mscope *_mo, size_t size) {
 	return ptr;
 }
 
+// alloc_local() records memory's size for leave_local().
 static void *
 _mscope_alloc_local(struct _mscope *_mo, size_t size) {
 	size_t total = size+sizeof(union align);
@@ -284,7 +284,6 @@ mscope_leave_local(mscope_t mo, void *mark, ...) {
 	va_end(args);
 }
 
-// alloc_local() records memory's size for leave_local().
 void *
 mscope_alloc_local(mscope_t mo, size_t size) {
 	size = align_size(size);

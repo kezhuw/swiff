@@ -1,5 +1,4 @@
 #include "mscope.h"
-#include "memory.h"
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
