@@ -5,7 +5,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define mmstat_define(ptr, size, file, line)		(&(const struct meminf) {ptr, size, file, line})
+#define meminf_define(ptr, size, file, line)		(&(const struct meminf) {ptr, size, file, line})
 struct meminf {
 	const void *ptr;
 	size_t size;
@@ -92,7 +92,7 @@ _delete_meminf(struct _memory *_mm, struct meminf *mi) {
 // If fails, dealloc() ptr and return NULL.
 void *
 _insert_newptr(struct _memory *_mm, void *ptr, size_t size, const char *file, int line) {
-	const struct meminf *mi = mmstat_define(ptr, size, file, line);
+	const struct meminf *mi = meminf_define(ptr, size, file, line);
 	if (!_insert_meminf(_mm, mi)) {
 		struct memface *mc = _mm->mface;
 		mc->dealloc(mc->ctx, ptr, __FILE__, __LINE__);
@@ -194,7 +194,7 @@ memory_realloc(memory_t mm, void *ptr, size_t size, const char *file, int line) 
 			_delete_meminf(_mm, mi);
 		}
 	} else {
-		const struct meminf *re = mmstat_define(ret, size, file, line);
+		const struct meminf *re = meminf_define(ret, size, file, line);
 		_mm->memsize += size;
 		_mm->memsize -= mi->size;
 		_update_meminf(_mm, mi, re);
