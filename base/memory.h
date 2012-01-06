@@ -1,7 +1,6 @@
 #ifndef __MEMORY_H
 #define __MEMORY_H
 
-#include "except.h"
 #include "helper.h"
 #include <stddef.h>
 
