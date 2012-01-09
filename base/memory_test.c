@@ -70,7 +70,7 @@ test_memory_error(void) {
 	struct errface ec = {.ctx = &e, .err = _err};
 
 	memory_t mm;
-	memory_init(mm, &mc, &lc, &ec);
+	memory_init(mm, &mc, &lc, &ec, "test_error");
 	if (setjmp(e.env) == 0) {
 		memory_dealloc(mm, (void *)12, __FILE__, __LINE__);
 	} else {
@@ -86,7 +86,27 @@ test_memory_error(void) {
 }
 
 static void
-test_memory_memctx(void) {
+test_memory_reside(void) {
+	struct memface mc = {.alloc = (MemfaceAllocFunc_t)_alloc, .dealloc = (MemfaceDeallocFunc_t)_dealloc};
+	struct logface lc = {.ctx = stdout, .log = _log};
+	struct errenv e;
+	e.out = stderr;
+	struct errface ec = {.ctx = &e, .err = _err};
+
+	memory_t mm0;
+	memory_t mm1;
+	memory_init(mm0, &mc, &lc, &ec, "test_reside_0");
+	memory_init(mm1, &mc, &lc, &ec, "test_reside_1");
+	assert(NULL != memory_reside(mm0, memory_alloc(mm0, 0x333, __FILE__, __LINE__)));
+	assert(NULL != memory_reside(mm1, memory_alloc(mm1, 0x555, __FILE__, __LINE__)));
+	assert(NULL == memory_reside(mm0, memory_alloc(mm1, 0x123, __FILE__, __LINE__)));
+	assert(NULL == memory_reside(mm1, memory_alloc(mm0, 0x234, __FILE__, __LINE__)));
+	memory_fini(mm0);
+	memory_fini(mm1);
+}
+
+static void
+test_memory_memface(void) {
 	struct memface mc = {.alloc = (MemfaceAllocFunc_t)_alloc, .dealloc = (MemfaceDeallocFunc_t)_dealloc};
 	struct logface lc = {.ctx = stdout, .log = _log};
 	struct errenv e;
@@ -94,7 +114,7 @@ test_memory_memctx(void) {
 	struct errface ec = {.ctx = &e, .err = _err};
 
 	memory_t mm;
-	struct memface *m = memory_init(mm, &mc, &lc, &ec);
+	struct memface *m = memory_init(mm, &mc, &lc, &ec, "test_memctx");
 	if (setjmp(e.env) == 0) {
 		void *ptr = m->alloc(m->ctx, 0x20, __FILE__, __LINE__);
 		assert(ptr != NULL);
@@ -120,7 +140,7 @@ test_memory_fini(void) {
 	struct errface ec = {.ctx = &e, .err = _err};
 
 	memory_t mm;
-	memory_init(mm, &mc, &lc, &ec);
+	memory_init(mm, &mc, &lc, &ec, "test_fini");
 
 	void *ptr;
 	ptr = memory_alloc(mm, 11, __FILE__, __LINE__);
@@ -160,7 +180,7 @@ test_memory_mixed(void) {
 
 	memory_t mm;
 _restart:
-	memory_init(mm, &mc, &lc, &ec);
+	memory_init(mm, &mc, &lc, &ec, "test_mixed");
 	if (setjmp(e.env) == 0) {
 		void *ptr0, *ptr1, *ptr2, *ptr3;
 		memory_alloc(mm, 19, __FILE__, __LINE__);
@@ -206,7 +226,8 @@ main(void) {
 
 	printf("Test memory, start.\n");
 	test_memory_error();
-	test_memory_memctx();
+	test_memory_reside();
+	test_memory_memface();
 	test_memory_fini();
 	test_memory_mixed();
 	printf("Test memory, done.\n");
