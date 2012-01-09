@@ -85,6 +85,52 @@ test_memory_error(void) {
 	memory_fini(mm);
 }
 
+static bool
+great(size_t amount, size_t sum) {
+	return amount >= sum;
+}
+
+static bool
+equal(size_t amount, size_t sum) {
+	return amount == sum;
+}
+
+static void
+test_memory_amount(void) {
+	struct memface mc = {.alloc = (MemfaceAllocFunc_t)_alloc, .dealloc = (MemfaceDeallocFunc_t)_dealloc};
+	struct logface lc = {.ctx = stdout, .log = _log};
+	struct errenv e;
+	e.out = stderr;
+	struct errface ec = {.ctx = &e, .err = _err};
+
+	bool (*compare)(size_t amount, size_t sum) = great;
+	memory_t mm;
+_again:
+	memory_init(mm, &mc, &lc, &ec, "test_amount");
+
+	assert(compare(memory_amount(mm), 0x00));
+	void *ptr;
+	memory_zalloc(mm, 0x20, __FILE__, __LINE__);
+	memory_alloc(mm, 0x120, __FILE__, __LINE__);
+	assert(compare(memory_amount(mm), 0x140));
+	ptr = memory_zalloc(mm, 0x140, __FILE__, __LINE__);
+	assert(compare(memory_amount(mm), 0x280));
+	ptr = memory_realloc(mm, ptr, 0x240, __FILE__, __LINE__);
+	assert(compare(memory_amount(mm), 0x380));
+	ptr = memory_realloc(mm, ptr, 0x200, __FILE__, __LINE__);
+	assert(compare(memory_amount(mm), 0x340));
+	memory_dealloc(mm, ptr, __FILE__, __LINE__);
+	assert(compare(memory_amount(mm), 0x140));
+	memory_fini(mm);
+	assert(compare(memory_amount(mm), 0x00));
+
+	if (mc.realloc == NULL) {
+		mc.realloc = (MemfaceReallocFunc_t)_realloc;
+		compare = equal;
+		goto _again;
+	}
+}
+
 static void
 test_memory_reside(void) {
 	struct memface mc = {.alloc = (MemfaceAllocFunc_t)_alloc, .dealloc = (MemfaceDeallocFunc_t)_dealloc};
@@ -226,6 +272,7 @@ main(void) {
 
 	printf("Test memory, start.\n");
 	test_memory_error();
+	test_memory_amount();
 	test_memory_reside();
 	test_memory_memface();
 	test_memory_fini();
