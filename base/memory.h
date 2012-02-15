@@ -20,8 +20,6 @@ struct memface *memory_init(memory_t mm, const struct memface *mc, const struct 
 void memory_fini(memory_t mm);
 
 // Amount of memory allocated from mc memface.
-// Result may great than arithmetic sum of 'size' arguments passed to
-// allocated or deallocated functions, if mc does not implement realloc.
 size_t memory_amount(memory_t mm);
 // Return ptr, if ptr was allocated by mm, otherwise NULL.
 void *memory_reside(memory_t mm, const void *ptr);
