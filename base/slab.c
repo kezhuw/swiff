@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include "slab.h"
 #include "multip.h"
 #include "helper.h"
 
@@ -16,9 +17,11 @@ union slot {
 #define assert_isize(isize)	(assert((isize >= sizeof(union slot)) || !"item size too small"))
 #define assert_nitem(nitem)	(assert((nitem > 0) || !"nitem must great than zero"))
 
-#define slab_invariant(sa)	((uintptr_t)((sa)->dealloc))
+typedef uintptr_t invar_t;
 
-// XXX It is better to use function ptr as invariant ?
+#define slab_invariant(sa)	((invar_t)((sa)->dealloc))
+
+#define assert_invar()		assert((sizeof(union slot *) == sizeof(MemfaceDeallocFunc_t)) || !"sorry for architecture dependent")
 struct slab {
 	MemfaceDeallocFunc_t dealloc;
 	void *memctx;
@@ -28,7 +31,8 @@ struct slab {
 	char *allocpos;
 	char *sentinel;
 	union slot *frees;
-	struct next ahead;
+	struct next *ahead;
+	struct next first;
 };
 
 static void
@@ -38,15 +42,16 @@ slab_init(struct slab *sa, size_t blocksize, size_t totalsize) {
 	sa->allocpos = (char *)(sa+1);
 	sa->sentinel = sa->allocpos;
 	sa->frees = NULL;
-	sa->ahead.next = &sa->ahead;
+	sa->ahead = &sa->first;
+	sa->first.next = NULL;
 }
 
 static void
 slab_fini(struct slab *sa) {
 	MemfaceDeallocFunc_t dealloc = sa->dealloc;
 	void *memctx = sa->memctx;
-	struct next *i = sa->ahead.next;
-	while (i != &sa->ahead) {
+	struct next *i = sa->ahead;
+	while (i != &sa->first) {
 		struct next *n = i->next;
 		dealloc(memctx, i, __FILE__, __LINE__);
 		i = n;
@@ -55,9 +60,9 @@ slab_fini(struct slab *sa) {
 
 static void
 pool_fini(struct slab *so) {
-	uintptr_t invar = slab_invariant(so);
+	invar_t invar = slab_invariant(so);
 	size_t chunksize = so->chunksize;
-	struct next *n = so->ahead.next;
+	struct next *n = so->ahead;
 	char *revptr = so->allocpos;
 	for (;;) {
 		char *begptr = (char *)(n+1);
@@ -69,7 +74,7 @@ pool_fini(struct slab *so) {
 			}
 		}
 		assert(revptr == begptr);
-		if (n == n->next) {
+		if (n == &so->first) {
 			break;
 		}
 		n = n->next;
@@ -107,8 +112,8 @@ slab_alloc(struct slab *sa) {
 	}
 	if (sa->allocpos == sa->sentinel) {
 		struct next *n = sa->alloc(sa->memctx, sa->chunksize, __FILE__, __LINE__);
-		n->next = sa->ahead.next;
-		sa->ahead.next = n;
+		n->next = sa->ahead;
+		sa->ahead = n;
 		sa->allocpos = (char *)(n+1);
 		sa->sentinel = (char *)n + sa->chunksize;
 	}
@@ -127,11 +132,12 @@ slab_dealloc(struct slab *sa, void *ptr) {
 struct slab_pool *
 slab_pool_create(struct memface *mc, size_t nitem) {
 	assert_nitem(nitem);
-	struct slab_pool *so = (struct slab_pool *)slab_create(mc, sizeof(struct slab), nitem);
+	assert_invar();
+	struct slab_pool *so = (struct slab_pool *)slab_create(mc, nitem, sizeof(struct slab));
 	return so;
 }
 
-struct slab_pool *
+void
 slab_pool_delete(struct slab_pool *so) {
 	struct slab *po = (struct slab *)so;
 	pool_fini(po);
