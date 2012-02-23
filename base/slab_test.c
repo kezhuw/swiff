@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <stdbool.h>
 
 struct stat {
 	size_t peak;
