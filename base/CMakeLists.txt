@@ -30,3 +30,7 @@ ADD_TEST(memory_test ${TEST_BINARY_DIR}/memory_test.out)
 SET(MSCOPE_MODULE_SOURCE_FILES mscope.c)
 ADD_EXECUTABLE(mscope_test.out mscope_test.c ${MSCOPE_MODULE_SOURCE_FILES})
 ADD_TEST(mscope_test ${TEST_BINARY_DIR}/mscope_test.out)
+
+SET(SLAB_MODULE_SOURCE_FILES slab.c)
+ADD_EXECUTABLE(slab_test.out slab_test.c ${SLAB_MODULE_SOURCE_FILES})
+ADD_TEST(slab_test ${TEST_BINARY_DIR}/slab_test.out)
