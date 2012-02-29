@@ -69,8 +69,7 @@ test_memory_error(void) {
 	e.out = stderr;
 	struct errface ec = {.ctx = &e, .err = _err};
 
-	memory_t mm;
-	memory_init(mm, &mc, &lc, &ec, "test_error");
+	struct memory *mm = memory_create(&mc, &lc, &ec, "test_error");
 	if (setjmp(e.env) == 0) {
 		memory_dealloc(mm, (void *)12, __FILE__, __LINE__);
 	} else {
@@ -82,7 +81,7 @@ test_memory_error(void) {
 	} else {
 		_log(stderr, "Caught realloc error.\n");
 	}
-	memory_fini(mm);
+	memory_delete(mm);
 }
 
 static void
@@ -93,9 +92,9 @@ test_memory_amount(void) {
 	e.out = stderr;
 	struct errface ec = {.ctx = &e, .err = _err};
 
-	memory_t mm;
+	struct memory *mm;
 _again:
-	memory_init(mm, &mc, &lc, &ec, "test_amount");
+	mm = memory_create(&mc, &lc, &ec, "test_amount");
 
 	void *ptr;
 	memory_zalloc(mm, 0x20, __FILE__, __LINE__);
@@ -109,7 +108,7 @@ _again:
 	assert(memory_amount(mm) >= 0x340);
 	memory_dealloc(mm, ptr, __FILE__, __LINE__);
 	assert(memory_amount(mm) >= 0x140);
-	memory_fini(mm);
+	memory_delete(mm);
 
 	if (mc.realloc == NULL) {
 		mc.realloc = (MemfaceReallocFunc_t)_realloc;
@@ -125,16 +124,14 @@ test_memory_reside(void) {
 	e.out = stderr;
 	struct errface ec = {.ctx = &e, .err = _err};
 
-	memory_t mm0;
-	memory_t mm1;
-	memory_init(mm0, &mc, &lc, &ec, "test_reside_0");
-	memory_init(mm1, &mc, &lc, &ec, "test_reside_1");
+	struct memory *mm0 = memory_create(&mc, &lc, &ec, "test_reside_0");
+	struct memory *mm1 = memory_create(&mc, &lc, &ec, "test_reside_1");
 	assert(NULL != memory_reside(mm0, memory_alloc(mm0, 0x333, __FILE__, __LINE__)));
 	assert(NULL != memory_reside(mm1, memory_alloc(mm1, 0x555, __FILE__, __LINE__)));
 	assert(NULL == memory_reside(mm0, memory_alloc(mm1, 0x123, __FILE__, __LINE__)));
 	assert(NULL == memory_reside(mm1, memory_alloc(mm0, 0x234, __FILE__, __LINE__)));
-	memory_fini(mm0);
-	memory_fini(mm1);
+	memory_delete(mm0);
+	memory_delete(mm1);
 }
 
 static void
@@ -145,8 +142,7 @@ test_memory_memface(void) {
 	e.out = stderr;
 	struct errface ec = {.ctx = &e, .err = _err};
 
-	memory_t mm;
-	struct memface *m = memory_init(mm, &mc, &lc, &ec, "test_memctx");
+	struct memface *m = memory_create(&mc, &lc, &ec, "test_memface");
 	if (setjmp(e.env) == 0) {
 		void *ptr = m->alloc(m->ctx, 0x20, __FILE__, __LINE__);
 		assert(ptr != NULL);
@@ -160,7 +156,7 @@ test_memory_memface(void) {
 	} else {
 		assert(0);
 	}
-	memory_fini(mm);
+	memory_delete(m);
 }
 
 static void
@@ -171,8 +167,7 @@ test_memory_fini(void) {
 	e.out = stderr;
 	struct errface ec = {.ctx = &e, .err = _err};
 
-	memory_t mm;
-	memory_init(mm, &mc, &lc, &ec, "test_fini");
+	struct memory *mm = memory_create(&mc, &lc, &ec, "test_fini");
 
 	void *ptr;
 	ptr = memory_alloc(mm, 11, __FILE__, __LINE__);
@@ -199,7 +194,7 @@ test_memory_fini(void) {
 	ptr = memory_alloc(mm, 1111, __FILE__, __LINE__);
 	memory_dealloc(mm, ptr, __FILE__, __LINE__);
 
-	memory_fini(mm);
+	memory_delete(mm);
 }
 
 static void
@@ -210,9 +205,9 @@ test_memory_mixed(void) {
 	e.out = stderr;
 	struct errface ec = {.ctx = &e, .err = _err};
 
-	memory_t mm;
+	struct memory *mm;
 _restart:
-	memory_init(mm, &mc, &lc, &ec, "test_mixed");
+	mm = memory_create(&mc, &lc, &ec, "test_mixed");
 	if (setjmp(e.env) == 0) {
 		void *ptr0, *ptr1, *ptr2, *ptr3;
 		memory_alloc(mm, 19, __FILE__, __LINE__);
@@ -240,7 +235,7 @@ _restart:
 	} else {
 		assert(0);
 	}
-	memory_fini(mm);
+	memory_delete(mm);
 	if (mc.realloc == NULL) {
 		mc.realloc = (MemfaceReallocFunc_t)_realloc;
 		goto _restart;

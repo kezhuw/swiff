@@ -13,8 +13,8 @@ struct meminf {
 	int line;
 };
 
-struct _memory {
-	struct memface iface;
+struct memory {
+	struct memface iface[1];
 	struct memface mface[1];
 	struct logface lface[1];
 	struct errface eface[1];
@@ -26,37 +26,37 @@ struct _memory {
 };
 
 static inline bool
-_expand_meminf(struct _memory *_mm) {
-	size_t n = _mm->nmeminf;
-	if (_mm->imeminf == _mm->nmeminf) {
-		struct memface *mc = _mm->mface;
+_expand_meminf(struct memory *mm) {
+	size_t n = mm->nmeminf;
+	if (mm->imeminf == mm->nmeminf) {
+		struct memface *mc = mm->mface;
 		size_t newsize = (2*n + 1) * sizeof(struct meminf);
 		void *data = NULL;
 		if (mc->realloc == NULL) {
 			data = mc->alloc(mc->ctx, newsize, __FILE__, __LINE__);
 			if (data != NULL) {
-				memcpy(data, _mm->meminfs, n*sizeof(struct meminf));
-				mc->dealloc(mc->ctx, _mm->meminfs, __FILE__, __LINE__);
+				memcpy(data, mm->meminfs, n*sizeof(struct meminf));
+				mc->dealloc(mc->ctx, mm->meminfs, __FILE__, __LINE__);
 			}
 		} else {
-			data = mc->realloc(mc->ctx, _mm->meminfs, newsize, __FILE__, __LINE__);
+			data = mc->realloc(mc->ctx, mm->meminfs, newsize, __FILE__, __LINE__);
 		}
 		if (data == NULL) {
 			return false;
 		}
-		_mm->nmeminf = 2*n + 1;
-		_mm->meminfs = data;
+		mm->nmeminf = 2*n + 1;
+		mm->meminfs = data;
 	}
 	return true;
 }
 
 // *mi valid until _insert_meminf()/_delete_meminf().
 static bool
-_search_meminf(struct _memory *_mm, const void *ptr, struct meminf **mi) {
+_search_meminf(const struct memory *mm, const void *ptr, struct meminf **mi) {
 	assert(mi != NULL);
-	for (size_t i=0, n=_mm->imeminf; i<n; i++) {
-		if (_mm->meminfs[i].ptr == ptr) {
-			*mi = &_mm->meminfs[i];
+	for (size_t i=0, n=mm->imeminf; i<n; i++) {
+		if (mm->meminfs[i].ptr == ptr) {
+			*mi = &mm->meminfs[i];
 			return true;
 		}
 	}
@@ -64,42 +64,42 @@ _search_meminf(struct _memory *_mm, const void *ptr, struct meminf **mi) {
 }
 
 static inline bool
-_insert_meminf(struct _memory *_mm, const struct meminf *mi) {
-	if (!_expand_meminf(_mm)) {
+_insert_meminf(struct memory *mm, const struct meminf *mi) {
+	if (!_expand_meminf(mm)) {
 		return false;
 	}
-	_mm->meminfs[_mm->imeminf++] = *mi;
-	_mm->memsize += mi->size;
+	mm->meminfs[mm->imeminf++] = *mi;
+	mm->memsize += mi->size;
 	return true;
 }
 
 // Ensure *mi is returned by _search_meminf(), and there is no _insert_meminf()/
 // _delete_meminf() between _update_meminf() and _search_meminf().
 static inline void
-_update_meminf(struct _memory *_mm, struct meminf *mi, const struct meminf *ch) {
-	assert(mi >= _mm->meminfs && mi < _mm->meminfs+_mm->imeminf);
-	_mm->memsize += ch->size;
-	_mm->memsize -= mi->size;
+_update_meminf(struct memory *mm, struct meminf *mi, const struct meminf *ch) {
+	assert(mi >= mm->meminfs && mi < mm->meminfs+mm->imeminf);
+	mm->memsize += ch->size;
+	mm->memsize -= mi->size;
 	*mi = *ch;
 }
 
 static inline void
-_delete_meminf(struct _memory *_mm, struct meminf *mi) {
-	assert(_mm->imeminf > 0);
-	assert(_mm->memsize >= mi->size);
-	assert(mi >= _mm->meminfs && mi < _mm->meminfs+_mm->imeminf);
+_delete_meminf(struct memory *mm, struct meminf *mi) {
+	assert(mm->imeminf > 0);
+	assert(mm->memsize >= mi->size);
+	assert(mi >= mm->meminfs && mi < mm->meminfs+mm->imeminf);
 
-	_mm->memsize -= mi->size;
-	_mm->imeminf--;
-	memmove(mi, mi+1, (&_mm->meminfs[_mm->imeminf] - mi) * sizeof(struct meminf));
+	mm->memsize -= mi->size;
+	mm->imeminf--;
+	memmove(mi, mi+1, (&mm->meminfs[mm->imeminf] - mi) * sizeof(struct meminf));
 }
 
 // If fails, dealloc() ptr and return NULL.
 void *
-_insert_newptr(struct _memory *_mm, void *ptr, size_t size, const char *file, int line) {
+_insert_newptr(struct memory *mm, void *ptr, size_t size, const char *file, int line) {
 	const struct meminf *mi = meminf_define(ptr, size, file, line);
-	if (!_insert_meminf(_mm, mi)) {
-		struct memface *mc = _mm->mface;
+	if (!_insert_meminf(mm, mi)) {
+		struct memface *mc = mm->mface;
 		mc->dealloc(mc->ctx, ptr, __FILE__, __LINE__);
 		ptr = NULL;
 	}
@@ -107,56 +107,50 @@ _insert_newptr(struct _memory *_mm, void *ptr, size_t size, const char *file, in
 }
 
 size_t
-memory_amount(memory_t mm) {
-	struct _memory *_mm = (struct _memory *)mm;
-	return _mm->memsize;
+memory_amount(const struct memory *mm) {
+	return mm->memsize;
 }
 
 void *
-memory_reside(memory_t mm, const void *ptr) {
-	struct _memory *_mm = (struct _memory *)mm;
+memory_reside(const struct memory *mm, const void *ptr) {
 	struct meminf *mi;
-	return (_search_meminf(_mm, ptr, &mi) ? (void *)ptr : NULL);
+	return (_search_meminf(mm, ptr, &mi) ? (void *)ptr : NULL);
 }
 
 int
-memory_report(memory_t mm, const void *ptr) {
-	struct _memory *_mm = (struct _memory *)mm;
-	struct logface *lc = _mm->lface;
+memory_report(const struct memory *mm, const void *ptr) {
+	const struct logface *lc = mm->lface;
 	struct meminf *mi;
-	if (_search_meminf(_mm, ptr, &mi)) {
-		return lc->log(lc->ctx, "[%s:%s()] memory %p, size %zu, allocated at file %s line %d.\n", _mm->ident, __func__, mi->ptr, mi->size, mi->file, mi->line);
+	if (_search_meminf(mm, ptr, &mi)) {
+		return lc->log(lc->ctx, "[%s:%s()] memory %p, size %zu, allocated at file %s line %d.\n", mm->ident, __func__, mi->ptr, mi->size, mi->file, mi->line);
 	} else {
-		return lc->log(lc->ctx, "[%s:%s()] invalid memory address %p.\n", _mm->ident, __func__, ptr);
+		return lc->log(lc->ctx, "[%s:%s()] invalid memory address %p.\n", mm->ident, __func__, ptr);
 	}
 }
 
 int
-memory_status(memory_t mm) {
-	struct _memory *_mm = (struct _memory *)mm;
-	struct logface *lc = _mm->lface;
-	return lc->log(lc->ctx, "[%s:%s()] %zu bytes allocated by clients, %zu bytes used by memory module.\n", _mm->ident, __func__, _mm->memsize, _mm->nmeminf * sizeof(struct meminf));
+memory_status(const struct memory *mm) {
+	const struct logface *lc = mm->lface;
+	return lc->log(lc->ctx, "[%s:%s()] %zu bytes allocated by clients, %zu bytes used by memory module.\n", mm->ident, __func__, mm->memsize, mm->nmeminf * sizeof(struct meminf));
 }
 
 void *
-memory_alloc(memory_t mm, size_t size, const char *file, int line) {
-	struct _memory *_mm = (struct _memory *)mm;
-	struct memface *mc = _mm->mface;
+memory_alloc(struct memory *mm, size_t size, const char *file, int line) {
+	struct memface *mc = mm->mface;
 	void *ptr = mc->alloc(mc->ctx, size, __FILE__, __LINE__);
 	if (ptr != NULL) {
-		ptr = _insert_newptr(_mm, ptr, size, file, line);
+		ptr = _insert_newptr(mm, ptr, size, file, line);
 	}
 	return ptr;
 }
 
 void *
-memory_zalloc(memory_t mm, size_t size, const char *file, int line) {
-	struct _memory *_mm = (struct _memory *)mm;
-	struct memface *mc = _mm->mface;
+memory_zalloc(struct memory *mm, size_t size, const char *file, int line) {
+	struct memface *mc = mm->mface;
 	if (mc->zalloc != NULL) {
 		void *ptr = mc->zalloc(mc->ctx, size, __FILE__, __LINE__);
 		if (ptr != NULL) {
-			ptr = _insert_newptr(_mm, ptr, size, file, line);
+			ptr = _insert_newptr(mm, ptr, size, file, line);
 		}
 		return ptr;
 	} else {
@@ -169,19 +163,18 @@ memory_zalloc(memory_t mm, size_t size, const char *file, int line) {
 }
 
 void *
-memory_realloc(memory_t mm, void *ptr, size_t size, const char *file, int line) {
+memory_realloc(struct memory *mm, void *ptr, size_t size, const char *file, int line) {
 	if (ptr == NULL) {
 		return memory_alloc(mm, size, file, line);
 	}
-	struct _memory *_mm = (struct _memory *)mm;
 	struct meminf *mi;
-	if (!_search_meminf(_mm, ptr, &mi)) {
-		struct errface *ec = _mm->eface;
-		ec->err(ec->ctx, "[%s:%s()] invalid memory address %p, reallocated at file %s line %d.\n", _mm->ident, __func__, ptr, file, line);
+	if (!_search_meminf(mm, ptr, &mi)) {
+		struct errface *ec = mm->eface;
+		ec->err(ec->ctx, "[%s:%s()] invalid memory address %p, reallocated at file %s line %d.\n", mm->ident, __func__, ptr, file, line);
 		abort();
 		return NULL;
 	}
-	struct memface *mc = _mm->mface;
+	struct memface *mc = mm->mface;
 	if (mc->realloc == NULL) {
 		void *ret = ptr;
 		size_t oldsize = mi->size;
@@ -195,7 +188,7 @@ memory_realloc(memory_t mm, void *ptr, size_t size, const char *file, int line) 
 		} else {
 			// Uses oldsize here.
 			const struct meminf *re = meminf_define(ptr, oldsize, file, line);
-			_update_meminf(_mm, mi, re);
+			_update_meminf(mm, mi, re);
 		}
 		return ret;
 	}
@@ -203,34 +196,33 @@ memory_realloc(memory_t mm, void *ptr, size_t size, const char *file, int line) 
 	void *ret = mc->realloc(mc, ptr, size, __FILE__, __LINE__);
 	if (ret == NULL) {
 		if (size == 0) {
-			_delete_meminf(_mm, mi);
+			_delete_meminf(mm, mi);
 		}
 	} else {
 		const struct meminf *re = meminf_define(ret, size, file, line);
-		_update_meminf(_mm, mi, re);
+		_update_meminf(mm, mi, re);
 	}
 	return ret;
 }
 
 void
-memory_dealloc(memory_t mm, void *ptr, const char *file, int line) {
-	struct _memory *_mm = (struct _memory *)mm;
+memory_dealloc(struct memory *mm, void *ptr, const char *file, int line) {
 	if (ptr != NULL) {
 		struct meminf *mi;
-		if (!_search_meminf(_mm, ptr, &mi)) {
-			struct errface *ec = _mm->eface;
-			ec->err(ec->ctx, "[%s:%s()] invalid memory address %p, deallocated at file %s line %d.\n", _mm->ident, __func__, ptr, file, line);
+		if (!_search_meminf(mm, ptr, &mi)) {
+			struct errface *ec = mm->eface;
+			ec->err(ec->ctx, "[%s:%s()] invalid memory address %p, deallocated at file %s line %d.\n", mm->ident, __func__, ptr, file, line);
 			abort();
 			return;
 		}
-		_delete_meminf(_mm, mi);
+		_delete_meminf(mm, mi);
 	}
-	struct memface *mc = _mm->mface;
+	struct memface *mc = mm->mface;
 	mc->dealloc(mc, ptr, __FILE__, __LINE__);
 }
 
-struct memface *
-memory_init(memory_t mm, const struct memface *mc, const struct logface *lc, const struct errface *ec, const char *ident) {
+void *
+memory_create(const struct memface *mc, const struct logface *lc, const struct errface *ec, const char *ident) {
 	assert(mc != NULL);
 	assert(lc != NULL);
 	assert(ec != NULL);
@@ -238,37 +230,38 @@ memory_init(memory_t mm, const struct memface *mc, const struct logface *lc, con
 	assert(lc->log != NULL);
 	assert(ec->err != NULL);
 	assert(ident != NULL);
-	struct _memory *_mm = (struct _memory *)mm;
-	_mm->mface[0] = *mc;
-	_mm->lface[0] = *lc;
-	_mm->eface[0] = *ec;
-	_mm->memsize = 0;
-	_mm->imeminf = _mm->nmeminf = 0;
-	_mm->meminfs = NULL;
-	_mm->ident = ident;
-	struct memface *m = &_mm->iface;
-	m->ctx = mm;
-	m->alloc = (MemfaceAllocFunc_t)memory_alloc;
-	m->zalloc = (MemfaceAllocFunc_t)memory_zalloc;
-	m->realloc = (MemfaceReallocFunc_t)memory_realloc;
-	m->dealloc = (MemfaceDeallocFunc_t)memory_dealloc;
-	return m;
+	struct memory *mm = mc->alloc(mc->ctx, sizeof(*mm), __FILE__, __LINE__);
+	if (mm != NULL) {
+		mm->mface[0] = *mc;
+		mm->lface[0] = *lc;
+		mm->eface[0] = *ec;
+		mm->memsize = 0;
+		mm->imeminf = mm->nmeminf = 0;
+		mm->meminfs = NULL;
+		mm->ident = ident;
+		struct memface *mc = mm->iface;
+		mc->ctx = mm;
+		mc->alloc = (MemfaceAllocFunc_t)memory_alloc;
+		mc->zalloc = (MemfaceAllocFunc_t)memory_zalloc;
+		mc->realloc = (MemfaceReallocFunc_t)memory_realloc;
+		mc->dealloc = (MemfaceDeallocFunc_t)memory_dealloc;
+	}
+	return mm;
 }
 
 void
-memory_fini(memory_t mm) {
-	struct _memory *_mm = (struct _memory *)mm;
-	struct memface *mc = _mm->mface;
-	struct logface *lc = _mm->lface;
+memory_delete(void *_m) {
+	struct memory *mm = _m;
+	struct memface *mc = mm->mface;
+	struct logface *lc = mm->lface;
 	MemfaceDeallocFunc_t dealloc = mc->dealloc;
-	for (size_t i=0; i<_mm->imeminf; i++) {
-		struct meminf *mi = _mm->meminfs+i;
+	for (size_t i=0; i<mm->imeminf; i++) {
+		struct meminf *mi = mm->meminfs+i;
 		dealloc(mc->ctx, (void *)mi->ptr, __FILE__, __LINE__);
-		lc->log(lc->ctx, "[%s:%s()] non-deallocted memory %p, size %zu, allocated at file %s line %d.\n", _mm->ident, __func__, mi->ptr, mi->size, mi->file, mi->line);
+		lc->log(lc->ctx, "[%s:%s()] non-deallocted memory %p, size %zu, allocated at file %s line %d.\n", mm->ident, __func__, mi->ptr, mi->size, mi->file, mi->line);
 	}
-	dealloc(mc->ctx, _mm->meminfs, __FILE__, __LINE__);
-	_mm->memsize = 0;
-	_mm->imeminf = _mm->nmeminf = 0;
-	_mm->meminfs = NULL;
+	dealloc(mc->ctx, mm->meminfs, __FILE__, __LINE__);
+	mm->memsize = 0;
+	mm->imeminf = mm->nmeminf = 0;
+	mm->meminfs = NULL;
 }
-
