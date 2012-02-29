@@ -1,27 +1,31 @@
-#ifndef __SCOPE_H
-#define __SCOPE_H
+#ifndef __MSCOPE_H
+#define __MSCOPE_H
 
 #include <stddef.h>
+#include "helper.h"
 
-typedef struct {
-	void *_[20];
-} mscope_t[1];
+struct mscope;
 
-typedef void *(*MscopeAlloc_t)(void *memctx, size_t size);
-typedef void (*MscopeDealloc_t)(void *memctx, void *ptr);
+// mc is a standard memface.
+struct mscope *mscope_create(const struct memface *mc);
 
-// Memory returned from alloc() must be properly aligned.
-void mscope_init(mscope_t mo, MscopeAlloc_t alloc, MscopeDealloc_t dealloc, void *memctx);
-void mscope_fini(mscope_t mo);
+// All functions below, assert(mo != NULL).
+
+// Free all memory allocated from mo, and delete mo.
+void mscope_delete(struct mscope *mo);
+
 // Reclaim cached memory.
-void mscope_collect(mscope_t mo);
+void mscope_collect(struct mscope *mo);
 
-// Global memory lives until fini().
-void *mscope_alloc_global(mscope_t mo, size_t size);
-void *mscope_alloc_local(mscope_t mo, size_t size);
+// Global memory lives until delete(mo).
+void *mscope_alloc_global(struct mscope *mo, size_t size);
 
-// Return value is the secend argument of leave_local.
-void *mscope_enter_local(mscope_t mo);
+// Enter a local scope, return value is this scope's signature.
+void *mscope_enter_local(struct mscope *mo);
+
+// Alloc memory from local scope.
+void *mscope_alloc_local(struct mscope *mo, size_t size);
+
 // Variable argument list are null-terminated pointers pointing to return values
 // from alloc_local(). The purpose of var-args is to provide the opportunity to
 // access memory outside the scope where it been allocated. After leave_local(),
@@ -30,9 +34,9 @@ void *mscope_enter_local(mscope_t mo);
 // other allocator.
 //
 // e.g.
-// void *mark = mscope_enter_local(mo);
+// void *sign = mscope_enter_local(mo);
 // void *ptr = mscope_alloc_local(mo, 33);
 // ...
-// mscope_leave_local(mo, mark, &ptr, NULL);
-void mscope_leave_local(mscope_t mo, void *mark, ...);
+// mscope_leave_local(mo, sign, &ptr, NULL);
+void mscope_leave_local(struct mscope *mo, void *sign, ...);
 #endif

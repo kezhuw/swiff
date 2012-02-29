@@ -28,13 +28,13 @@ struct block {
 static const size_t segsizes[] = {16, 32, 64, 128, 256, 512, 1024, 2048};
 #define NSEGMENT	(sizeof(segsizes)/sizeof(segsizes[0]))
 
-struct _mscope {
+struct mscope {
 	struct arena *local;
 	struct arena *global;
 	struct arena *frees;
 	void *memctx;
-	MscopeAlloc_t alloc;
-	MscopeDealloc_t dealloc;
+	MemfaceAllocFunc_t alloc;
+	MemfaceDeallocFunc_t dealloc;
 	struct arena dummy[1];
 	struct block *segments[NSEGMENT];
 };
@@ -66,133 +66,133 @@ reside_arena(struct arena *aa, uint8_t *ptr) {
 }
 
 static void
-_mscope_dealloc_arena(struct _mscope *_mo, struct arena *beg, struct arena *end) {
-	void *memctx = _mo->memctx;
-	MscopeDealloc_t dealloc = _mo->dealloc;
+_mscope_dealloc_arena(struct mscope *mo, struct arena *beg, struct arena *end) {
+	void *memctx = mo->memctx;
+	MemfaceDeallocFunc_t dealloc = mo->dealloc;
 	while (beg != end) {
 		struct arena *prev = beg->prev;
-		dealloc(memctx, beg);
+		dealloc(memctx, beg, __FILE__, __LINE__);
 		beg = prev;
 	}
 }
 
 static struct arena *
-_mscope_acquire_arena(struct _mscope *_mo, size_t hint) {
+_mscope_acquire_arena(struct mscope *mo, size_t hint) {
 	size_t size = hint+sizeof(union header);
 	if (size <= ARENA_SIZE) {
-		if (_mo->frees != NULL) {
-			struct arena *aa = _mo->frees;
-			_mo->frees = aa->prev;
+		if (mo->frees != NULL) {
+			struct arena *aa = mo->frees;
+			mo->frees = aa->prev;
 			aa->avail = (uint8_t *)aa + sizeof(union header);
 			return aa;
 		}
 		size = ARENA_SIZE;
 	}
-	struct arena *aa = _mo->alloc(_mo->memctx, size);
+	struct arena *aa = mo->alloc(mo->memctx, size, __FILE__, __LINE__);
 	aa->avail = (uint8_t *)aa + sizeof(union header);
 	aa->limit = (uint8_t *)aa + size;
 	return aa;
 }
 
 void
-_mscope_release_arena(struct _mscope *_mo, struct arena *aa) {
+_mscope_release_arena(struct mscope *mo, struct arena *aa) {
 	size_t size = (size_t)(aa->limit - (uint8_t *)aa);
 	if (size > ARENA_SIZE) {
-		_mo->dealloc(_mo->memctx, aa);
+		mo->dealloc(mo->memctx, aa, __FILE__, __LINE__);
 	} else {
 		assert(size == ARENA_SIZE);
-		aa->prev = _mo->frees;
-		_mo->frees = aa;
+		aa->prev = mo->frees;
+		mo->frees = aa;
 	}
 }
 
 static void
-_mscope_segment_block(struct _mscope *_mo, uint8_t *blk, size_t size) {
+_mscope_segment_block(struct mscope *mo, uint8_t *blk, size_t size) {
 	size_t i = NSEGMENT;
 	while (i-- && size>=segsizes[0]) {
 		if (size >= segsizes[i]) {
 			size = size-segsizes[i];
 			struct block *ins = (struct block *)(blk+size);
-			ins->next = _mo->segments[i];
-			_mo->segments[i] = ins;
+			ins->next = mo->segments[i];
+			mo->segments[i] = ins;
 		}
 	}
 }
 
 static void *
-_mscope_alloc_block(struct _mscope *_mo, size_t size) {
+_mscope_alloc_block(struct mscope *mo, size_t size) {
 	int k;
 	struct block *blk = NULL;
 	size_t i = NSEGMENT;
 	while (i--) {
 		if (size > segsizes[i])
 			break;
-		if (_mo->segments[i] != NULL) {
-			blk = _mo->segments[i];
+		if (mo->segments[i] != NULL) {
+			blk = mo->segments[i];
 			k = i;
 		}
 	}
 	if (blk != NULL) {
-		assert(_mo->segments[k] == blk);
+		assert(mo->segments[k] == blk);
 		assert(segsizes[k] >= size);
-		_mo->segments[k] = blk->next;
+		mo->segments[k] = blk->next;
 		size_t left = segsizes[k]-size;
-		_mscope_segment_block(_mo, (uint8_t *)blk, left);
+		_mscope_segment_block(mo, (uint8_t *)blk, left);
 		return (void *)((uint8_t *)blk+left);
 	}
 	return NULL;
 }
 
 static void *
-_mscope_alloc_global(struct _mscope *_mo, size_t size) {
-	void *ptr = _mscope_alloc_block(_mo, size);
+_mscope_alloc_global(struct mscope *mo, size_t size) {
+	void *ptr = _mscope_alloc_block(mo, size);
 	if (ptr == NULL) {
-		if (_mo->global->avail+size > _mo->global->limit) {
-			size_t rem = (size_t)(_mo->global->limit - _mo->global->avail);
-			_mscope_segment_block(_mo, _mo->global->avail, rem);
-			struct arena *aa = _mscope_acquire_arena(_mo, size);
-			aa->prev = _mo->global;
-			_mo->global = aa;
+		if (mo->global->avail+size > mo->global->limit) {
+			size_t rem = (size_t)(mo->global->limit - mo->global->avail);
+			_mscope_segment_block(mo, mo->global->avail, rem);
+			struct arena *aa = _mscope_acquire_arena(mo, size);
+			aa->prev = mo->global;
+			mo->global = aa;
 		}
-		ptr = _mo->global->avail;
-		_mo->global->avail += size;
+		ptr = mo->global->avail;
+		mo->global->avail += size;
 	}
 	return ptr;
 }
 
 // alloc_local() records memory's size for leave_local().
 static void *
-_mscope_alloc_local(struct _mscope *_mo, size_t size) {
+_mscope_alloc_local(struct mscope *mo, size_t size) {
 	size_t total = size+sizeof(union align);
-	if (_mo->local->avail+total > _mo->local->limit) {
-		struct arena *aa = _mscope_acquire_arena(_mo, total);
-		aa->prev = _mo->local;
-		_mo->local = aa;
+	if (mo->local->avail+total > mo->local->limit) {
+		struct arena *aa = _mscope_acquire_arena(mo, total);
+		aa->prev = mo->local;
+		mo->local = aa;
 	}
-	uint8_t *avail = _mo->local->avail;
-	_mo->local->avail += total;
-	assert(_mo->local->avail <= _mo->local->limit);
+	uint8_t *avail = mo->local->avail;
+	mo->local->avail += total;
+	assert(mo->local->avail <= mo->local->limit);
 	*((size_t *)avail) = size;
 	return (avail+sizeof(union align));
 }
 
 static void
-_mscope_inset_local(struct _mscope *_mo, struct arena *aa) {
-	assert(_mo->local != _mo->dummy);
-	aa->prev = _mo->local->prev;
-	_mo->local->prev = aa;
+_mscope_inset_local(struct mscope *mo, struct arena *aa) {
+	assert(mo->local != mo->dummy);
+	aa->prev = mo->local->prev;
+	mo->local->prev = aa;
 }
 
 static void
-_mscope_leave_local(struct _mscope *_mo, void *mark, va_list args) {
-	struct arena **itr = &_mo->local;
-	struct arena *end = _mo->dummy;
+_mscope_leave_local(struct mscope *mo, void *sign, va_list args) {
+	struct arena **itr = &mo->local;
+	struct arena *end = mo->dummy;
 	for (; *itr != end; itr = &(*itr)->prev) {
-		if (inside_arena(*itr, mark)) {
+		if (inside_arena(*itr, sign)) {
 			break;
 		}
 	}
-	assert(reside_arena(*itr, mark));
+	assert(reside_arena(*itr, sign));
 	struct arena *save = *itr;
 	*itr = end;
 
@@ -201,16 +201,16 @@ _mscope_leave_local(struct _mscope *_mo, void *mark, va_list args) {
 	for (void **pptr = va_arg(pptrs, void **); pptr != NULL; pptr = va_arg(pptrs, void **)) {
 		if (inside_arena(save, *pptr) && !reside_arena(save, *pptr)) {
 			size_t size = local_ptr2size(*pptr);
-			void *ptr = _mscope_alloc_local(_mo, size);
+			void *ptr = _mscope_alloc_local(mo, size);
 			memcpy(ptr, *pptr, size);
 			*pptr = ptr;
 		}
 	}
 	va_end(pptrs);
 
-	struct arena *cur = _mo->local;
-	_mo->local = save;
-	save->avail = mark;
+	struct arena *cur = mo->local;
+	mo->local = save;
+	save->avail = sign;
 	while (cur != end) {
 		struct arena *prev = cur->prev;
 		va_copy(pptrs, args);
@@ -219,82 +219,89 @@ _mscope_leave_local(struct _mscope *_mo, void *mark, va_list args) {
 				assert(reside_arena(cur, *pptr));
 				if (cur->limit-(uint8_t *)cur > ARENA_SIZE) {
 					// Arena used for only one allocation.
-					_mscope_inset_local(_mo, cur);
+					_mscope_inset_local(mo, cur);
 					goto _next_arena;
 				} else {
 					size_t size = local_ptr2size(*pptr);
-					void *ptr = _mscope_alloc_local(_mo, size);
+					void *ptr = _mscope_alloc_local(mo, size);
 					memcpy(ptr, *pptr, size);
 					*pptr = ptr;
 				}
 			}
 		}
-		_mscope_release_arena(_mo, cur);
+		_mscope_release_arena(mo, cur);
 	_next_arena:
 		va_end(pptrs);
 		cur = prev;
 	}
 }
 
-void
-mscope_init(mscope_t mo, MscopeAlloc_t alloc, MscopeDealloc_t dealloc, void *memctx) {
-	assert(mo != NULL && alloc != NULL);
-	struct _mscope *_mo = (struct _mscope *)mo;
-	_mo->memctx = memctx;
-	_mo->alloc = alloc;
-	_mo->dealloc = dealloc;
-	_mo->dummy->prev = NULL;
-	_mo->dummy->avail = _mo->dummy->limit = (uint8_t *)_mo->dummy + sizeof(union header);
-	_mo->local = _mo->global = _mo->dummy;
-	_mo->frees = NULL;
-	size_t i=NSEGMENT;
-	while (i--) {
-		_mo->segments[i] = NULL;
+struct mscope *
+mscope_create(const struct memface *mc) {
+	assert(mc != NULL);
+	assert(mc->alloc != NULL);
+	assert(mc->dealloc != NULL);
+	struct mscope *mo = mc->alloc(mc->ctx, sizeof(*mo), __FILE__, __LINE__);
+	if (mo != NULL) {
+		mo->memctx = mc->ctx;
+		mo->alloc = mc->alloc;
+		mo->dealloc = mc->dealloc;
+		mo->dummy->prev = NULL;
+		mo->dummy->avail = mo->dummy->limit = (uint8_t *)mo->dummy + sizeof(union header);
+		mo->local = mo->global = mo->dummy;
+		mo->frees = NULL;
+		size_t i=NSEGMENT;
+		while (i--) {
+			mo->segments[i] = NULL;
+		}
 	}
+	return mo;
 }
 
 void
-mscope_fini(mscope_t mo) {
-	struct _mscope *_mo = (struct _mscope *)mo;
-	_mscope_dealloc_arena(_mo, _mo->local, _mo->dummy);
-	_mscope_dealloc_arena(_mo, _mo->global, _mo->dummy);
-	_mscope_dealloc_arena(_mo, _mo->frees, NULL);
-	_mo->local = _mo->global = _mo->dummy;
-	_mo->frees = NULL;
+mscope_delete(struct mscope *mo) {
+	assert(mo != NULL);
+	_mscope_dealloc_arena(mo, mo->local, mo->dummy);
+	_mscope_dealloc_arena(mo, mo->global, mo->dummy);
+	_mscope_dealloc_arena(mo, mo->frees, NULL);
+	mo->local = mo->global = mo->dummy;
+	mo->frees = NULL;
+	mo->dealloc(mo->memctx, mo, __FILE__, __LINE__);
 }
 
 void
-mscope_collect(mscope_t mo) {
-	struct _mscope *_mo = (struct _mscope *)mo;
-	_mscope_dealloc_arena(_mo, _mo->frees, NULL);
-	_mo->frees = NULL;
+mscope_collect(struct mscope * mo) {
+	assert(mo != NULL);
+	_mscope_dealloc_arena(mo, mo->frees, NULL);
+	mo->frees = NULL;
 }
 
 void *
-mscope_enter_local(mscope_t mo) {
-	struct _mscope *_mo = (struct _mscope *)mo;
-	return _mo->local->avail;
+mscope_enter_local(struct mscope * mo) {
+	assert(mo != NULL);
+	return mo->local->avail;
 }
 
 void
-mscope_leave_local(mscope_t mo, void *mark, ...) {
+mscope_leave_local(struct mscope * mo, void *sign, ...) {
+	assert(mo != NULL);
 	va_list args;
-	va_start(args, mark);
-	_mscope_leave_local((struct _mscope *)mo, mark, args);
+	va_start(args, sign);
+	_mscope_leave_local(mo, sign, args);
 	va_end(args);
 }
 
 void *
-mscope_alloc_local(mscope_t mo, size_t size) {
+mscope_alloc_local(struct mscope * mo, size_t size) {
+	assert(mo != NULL);
 	size = align_size(size);
-	struct _mscope *_mo = (struct _mscope *)mo;
-	return _mscope_alloc_local(_mo, size);
+	return _mscope_alloc_local(mo, size);
 }
 
 void *
-mscope_alloc_global(mscope_t mo, size_t size) {
+mscope_alloc_global(struct mscope * mo, size_t size) {
+	assert(mo != NULL);
 	size = align_size(size);
-	struct _mscope *_mo = (struct _mscope *)mo;
-	void *ptr = _mscope_alloc_global(_mo, size);
+	void *ptr = _mscope_alloc_global(mo, size);
 	return ptr;
 }

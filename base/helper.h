@@ -2,6 +2,8 @@
 #define __HELPER_H
 
 #include <stddef.h>
+#include <stdint.h>
+#include "bitval.h"
 
 union align {
 	long long l;
@@ -16,10 +18,14 @@ union align {
 
 #define MAKEALIGN(n)		(ALIGNMENT * (((n) + ALIGNMASK)/ALIGNMENT))
 
+typedef long intreg_t;
+typedef unsigned long uintreg_t;
+
 
 typedef void * (*MemfaceAllocFunc_t)(void *ctx, size_t size, const char *file, int line);
 typedef void * (*MemfaceReallocFunc_t)(void *ctx, void *ptr, size_t size, const char *file, int line);
 typedef void (*MemfaceDeallocFunc_t)(void *ctx, void *ptr, const char *file, int line);
+
 // All implementations of memface must implement alloc/dealloc.
 struct memface {
 	void *ctx;
@@ -40,5 +46,4 @@ struct logface {
 	void *ctx;
 	LogfaceLogFunc_t log;
 };
-
 #endif

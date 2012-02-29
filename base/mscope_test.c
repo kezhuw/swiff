@@ -1,10 +1,12 @@
 #include "mscope.h"
+#include "helper.h"
+
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 
 static void
-mscope_test_global(mscope_t mo) {
+mscope_test_global(struct mscope *mo) {
 	printf("mscope_test_global(), start.\n");
 	void *ptr;
 	ptr = mscope_alloc_global(mo, 6666);		assert(ptr != NULL);
@@ -17,11 +19,11 @@ mscope_test_global(mscope_t mo) {
 }
 
 static void
-mscope_test_local(mscope_t mo) {
+mscope_test_local(struct mscope *mo) {
 	printf("mscope_test_local(), start.\n");
 	printf("mscope_test_local: before mscope_enter_local().\n");
 	void *left0 = mscope_alloc_local(mo, 333);
-	void *mark = mscope_enter_local(mo);
+	void *sign = mscope_enter_local(mo);
 	void *ptr;
 	ptr = mscope_alloc_local(mo, 256);		assert(ptr != NULL);
 	ptr = mscope_alloc_local(mo, 8172);		assert(ptr != NULL);
@@ -37,7 +39,7 @@ mscope_test_local(mscope_t mo) {
 	void *left0_backup = left0;
 	void *left1_backup = left1;
 	void *left2_backup = left2;
-	mscope_leave_local(mo, mark, &ptr, &left0, &left1, &left2, NULL);
+	mscope_leave_local(mo, sign, &ptr, &left0, &left1, &left2, NULL);
 	assert(left0 == left0_backup);
 	assert(left1 != left1_backup);
 	assert(left2 != left2_backup);
@@ -57,26 +59,27 @@ dealloc(void *ctx, void *ptr) {
 	free(ptr);
 }
 
+const struct memface memory = {NULL, (MemfaceAllocFunc_t)alloc, NULL, NULL, (MemfaceDeallocFunc_t)dealloc};
+
 static void
 mscope_test(void) {
 	printf("mscope_test(), start.\n");
-	mscope_t mo;
-	mscope_init(mo, alloc, dealloc, NULL);
+	struct mscope *mo = mscope_create(&memory);
 
 	printf("mscope_test: before mscope_enter_local().\n");
-	void *mark = mscope_enter_local(mo);
+	void *sign = mscope_enter_local(mo);
 	void *ptr;
 	ptr = mscope_alloc_local(mo, 45);		assert(ptr != NULL);
 	ptr = mscope_alloc_local(mo, 1024);		assert(ptr != NULL);
 	mscope_test_local(mo);
 	mscope_test_global(mo);
-	mscope_leave_local(mo, mark, &mo, NULL);
+	mscope_leave_local(mo, sign, &mo, NULL);
 	printf("mscope_test: after mscope_leave_local().\n");
-	mark = mscope_enter_local(mo);
-	mscope_leave_local(mo, mark, &mo, NULL);
+	sign = mscope_enter_local(mo);
+	mscope_leave_local(mo, sign, &mo, NULL);
 
 	ptr = mscope_alloc_global(mo, 125);		assert(ptr != NULL);
-	mscope_fini(mo);
+	mscope_delete(mo);
 	printf("mscope_test(), done.\n");
 }
 
