@@ -16,7 +16,7 @@ union align {
 #define ALIGNMENT		sizeof(union align)
 #define ALIGNMASK		(ALIGNMENT-1)
 
-#define MAKEALIGN(n)		(ALIGNMENT * (((n) + ALIGNMASK)/ALIGNMENT))
+#define MAKEALIGN(n)		(((n) + ALIGNMASK) & ~ALIGNMASK)
 
 typedef long intreg_t;
 typedef unsigned long uintreg_t;
