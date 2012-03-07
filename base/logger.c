@@ -1,5 +1,5 @@
 #include "logger.h"
-#include "multip.h"
+#include "compat.h"
 #include <stdarg.h>
 #include <stdbool.h>
 

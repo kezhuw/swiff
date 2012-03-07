@@ -1,5 +1,5 @@
-#ifndef __MULTIP_H
-#define __MULTIP_H
+#ifndef __COMPAT_H
+#define __COMPAT_H
 
 // Platform dependent header file.
 

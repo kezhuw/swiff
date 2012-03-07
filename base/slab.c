@@ -1,7 +1,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "slab.h"
-#include "multip.h"
+#include "compat.h"
 #include "helper.h"
 
 struct next {

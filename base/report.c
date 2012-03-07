@@ -1,6 +1,6 @@
 #include "logger.h"
 #include "report.h"
-#include "multip.h"
+#include "compat.h"
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdbool.h>

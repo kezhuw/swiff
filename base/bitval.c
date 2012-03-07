@@ -1,5 +1,5 @@
 #include "bitval.h"
-#include "multip.h"
+#include "compat.h"
 #include <limits.h>
 #include <stddef.h>
 #include <stdbool.h>
