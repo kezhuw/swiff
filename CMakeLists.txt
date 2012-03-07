@@ -1,9 +1,22 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8)
 
-PROJECT(SWIFF)
+project(swiff)
 
-ENABLE_TESTING()
+enable_testing()
 
-SET(CMAKE_C_FLAGS "-std=c99 -Werror -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-unused-variable -Wno-unused-label")
+set(C_FLAGS
+-std=c99
+-Werror
+-Wall
+-Wextra
+-Wno-unused-function
+-Wno-unused-label
+)
 
-ADD_SUBDIRECTORY(base)
+string(REPLACE ";" " " CMAKE_C_FLAGS "${C_FLAGS}")
+
+set(RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+set(LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+set(ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+
+add_subdirectory(base)

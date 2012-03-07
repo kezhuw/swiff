@@ -1,36 +1,46 @@
-ENABLE_TESTING()
+set(base_SRCS
+  logger.c
+  report.c
+  except.c
+  assert.c
+  bitval.c
+  memory.c
+  mscope.c
+  slab.c
+  )
 
-SET(TEST_BINARY_DIR ${PROJECT_BINARY_DIR}/testbin)
-SET(EXECUTABLE_OUTPUT_PATH ${TEST_BINARY_DIR})
+add_library(swiff_base ${base_SRCS})
 
-SET(LOGGER_MODULE_SOURCE_FILES logger.c)
-ADD_EXECUTABLE(logger_test.out logger_test.c ${LOGGER_MODULE_SOURCE_FILES})
-ADD_TEST(logger_test ${TEST_BINARY_DIR}/logger_test.out)
+install(TARGETS swiff_base DESTINATION lib)
 
-SET(REPORT_MODULE_SOURCE_FILES report.c ${LOGGER_MODULE_SOURCE_FILES})
-ADD_EXECUTABLE(report_test.out report_test.c ${REPORT_MODULE_SOURCE_FILES})
-ADD_TEST(report_test ${TEST_BINARY_DIR}/report_test.out)
+add_executable(logger_unittest logger_test.c)
+target_link_libraries(logger_unittest swiff_base)
+add_test(base/logger logger_unittest)
 
-SET(EXCEPT_MODULE_SOURCE_FILES except.c ${REPORT_MODULE_SOURCE_FILES})
-ADD_EXECUTABLE(except_test.out except_test.c ${EXCEPT_MODULE_SOURCE_FILES})
-ADD_TEST(except_test ${TEST_BINARY_DIR}/except_test.out)
+add_executable(report_unittest report_test.c)
+target_link_libraries(report_unittest swiff_base)
+add_test(base/report report_unittest)
 
-SET(ASSERT_MODULE_SOURCE_FILES assert.c ${EXCEPT_MODULE_SOURCE_FILES})
-ADD_EXECUTABLE(assert_test.out assert_test.c ${ASSERT_MODULE_SOURCE_FILES})
-ADD_TEST(assert_test ${TEST_BINARY_DIR}/assert_test.out)
+add_executable(except_unittest except_test.c)
+target_link_libraries(except_unittest swiff_base)
+add_test(base/except except_unittest)
 
-SET(BITVAL_MODULE_SOURCE_FILES bitval.c)
-ADD_EXECUTABLE(bitval_test.out bitval_test.c ${BITVAL_MODULE_SOURCE_FILES} ${EXCEPT_MODULE_SOURCE_FILES})
-ADD_TEST(bitval_test ${TEST_BINARY_DIR}/bitval_test.out)
+add_executable(assert_unittest assert_test.c)
+target_link_libraries(assert_unittest swiff_base)
+add_test(base/assert assert_unittest)
 
-SET(MEMORY_MODULE_SOURCE_FILES memory.c)
-ADD_EXECUTABLE(memory_test.out memory_test.c ${MEMORY_MODULE_SOURCE_FILES})
-ADD_TEST(memory_test ${TEST_BINARY_DIR}/memory_test.out)
+add_executable(bitval_unittest bitval_test.c)
+target_link_libraries(bitval_unittest swiff_base)
+add_test(base/bitval bitval_unittest)
 
-SET(MSCOPE_MODULE_SOURCE_FILES mscope.c)
-ADD_EXECUTABLE(mscope_test.out mscope_test.c ${MSCOPE_MODULE_SOURCE_FILES})
-ADD_TEST(mscope_test ${TEST_BINARY_DIR}/mscope_test.out)
+add_executable(memory_unittest memory_test.c)
+target_link_libraries(memory_unittest swiff_base)
+add_test(base/memory memory_unittest)
 
-SET(SLAB_MODULE_SOURCE_FILES slab.c)
-ADD_EXECUTABLE(slab_test.out slab_test.c ${SLAB_MODULE_SOURCE_FILES})
-ADD_TEST(slab_test ${TEST_BINARY_DIR}/slab_test.out)
+add_executable(mscope_unittest mscope_test.c)
+target_link_libraries(mscope_unittest swiff_base)
+add_test(base/mscope memory_unittest)
+
+add_executable(slab_unittest slab_test.c)
+target_link_libraries(slab_unittest swiff_base)
+add_test(base/slab slab_unittest)
