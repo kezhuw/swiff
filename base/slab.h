@@ -17,6 +17,12 @@ struct slab *slab_pool_alloc(struct slab_pool *so, size_t nitem, size_t isize);
 // Free all memory allocated from this slab and dealloc it.
 void slab_pool_dealloc(struct slab_pool *so, struct slab *sa);
 
+// Return true if all allocated slabs had been deallocated.
+bool slab_pool_idle(const struct slab_pool *so);
+
+// Return true if all allocated items had been deallocated.
+bool slab_idle(const struct slab *sa);
+
 void *slab_alloc(struct slab *sa);
 void slab_dealloc(struct slab *sa, void *ptr);
 

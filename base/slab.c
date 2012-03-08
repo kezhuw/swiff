@@ -16,6 +16,7 @@ union slot {
 
 #define assert_isize(isize)	(assert((isize >= sizeof(union slot)) || !"item size too small"))
 #define assert_nitem(nitem)	(assert((nitem > 0) || !"nitem must great than zero"))
+#define assert_allocnum(n)	(assert(((n) > 0) || !"too many deallocation"))
 
 typedef uintptr_t invar_t;
 
@@ -28,6 +29,7 @@ struct slab {
 	MemfaceAllocFunc_t alloc;
 	size_t blocksize;
 	size_t chunksize;
+	size_t allocnum;
 	char *allocpos;
 	char *sentinel;
 	union slot *frees;
@@ -35,10 +37,16 @@ struct slab {
 	struct next first;
 };
 
+bool
+slab_idle(const struct slab *sa) {
+	return sa->allocnum == 0;
+}
+
 static void
 slab_init(struct slab *sa, size_t blocksize, size_t totalsize) {
 	sa->blocksize = blocksize;
 	sa->chunksize = totalsize + sizeof(struct next);
+	sa->allocnum = 0;
 	sa->allocpos = (char *)(sa+1);
 	sa->sentinel = sa->allocpos;
 	sa->frees = NULL;
@@ -108,6 +116,7 @@ slab_alloc(struct slab *sa) {
 	if (sa->frees != NULL) {
 		union slot *ptr = sa->frees;
 		sa->frees = ptr->next;
+		sa->allocnum++;
 		return ptr;
 	}
 	if (sa->allocpos == sa->sentinel) {
@@ -119,6 +128,7 @@ slab_alloc(struct slab *sa) {
 	}
 	void *ptr = sa->allocpos;
 	sa->allocpos += sa->blocksize;
+	sa->allocnum++;
 	return ptr;
 }
 
@@ -127,6 +137,13 @@ slab_dealloc(struct slab *sa, void *ptr) {
 	union slot *p = ptr;
 	p->next = sa->frees;
 	sa->frees = p;
+	assert_allocnum(sa->allocnum);
+	sa->allocnum--;
+}
+
+bool
+slab_pool_idle(const struct slab_pool *so) {
+	return slab_idle((struct slab *)so);
 }
 
 struct slab_pool *

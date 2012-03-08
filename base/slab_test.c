@@ -59,6 +59,19 @@ static struct custom customs[] = {
 };
 
 static void
+slab_alloc_then_free(struct slab *sa, size_t n) {
+	void **sas = malloc(n*sizeof(*sas));
+	size_t i;
+	for (i=0; i<n; i++) {
+		sas[i] = slab_alloc(sa);
+	}
+	while (i--) {
+		slab_dealloc(sa, sas[i]);
+	}
+	free(sas);
+}
+
+static void
 slab_alloc_times(struct slab *sa, size_t n) {
 	size_t i;
 	for (i=0; i<n; i++) {
@@ -92,6 +105,21 @@ slab_pool_alloc_custom(struct slab_pool *so, struct custom *cm) {
 }
 
 static void
+slab_pool_alloc_then_free(struct slab_pool *so, struct custom *cm) {
+	size_t i;
+	for (i=0; cm[i].isize != 0; i++) {
+		struct slab *sa = slab_pool_alloc(so, cm[i].nitem, cm[i].isize);
+		slab_alloc_then_free(sa, cm[i].times);
+		if (!slab_idle(sa)) {
+			fprintf(stderr, "slab_idle false, custom index %zu, nitem %zu, isize %zu, times %zu.\n",
+					i, cm[i].nitem, cm[i].isize, cm[i].times);
+			abort();
+		}
+		slab_pool_dealloc(so, sa);
+	}
+}
+
+static void
 slab_ensure_zerosize(const char *ident) {
 	if (memstat.size != 0) {
 		fprintf(stderr, "%s fail, leak %zu size memory, peak size %zu .\n", ident, memstat.size, memstat.peak);
@@ -113,6 +141,18 @@ TestSlabPool(void) {
 	slab_ensure_zerosize(__func__);
 }
 
+static void
+TestSlabIdle(void) {
+	struct slab_pool *so = slab_pool_create(&memory, 5);
+	slab_pool_alloc_then_free(so, customs);
+	if (!slab_pool_idle(so)) {
+		fprintf(stderr, "slab_pool_idle false.\n");
+		abort();
+	}
+	slab_pool_delete(so);
+	slab_ensure_zerosize(__func__);
+}
+
 int
 main(void) {
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -120,6 +160,7 @@ main(void) {
 
 	TestSlab();
 	TestSlabPool();
+	TestSlabIdle();
 
 	return 0;
 }
