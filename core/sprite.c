@@ -1,5 +1,6 @@
 #include "player.h"
 #include <base/compat.h>
+#include <base/intreg.h>
 #include <base/helper.h>
 #include <base/slab.h>
 

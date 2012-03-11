@@ -1,4 +1,5 @@
 #include "slab.h"
+#include "helper.h"
 
 #include <stdio.h>
 #include <stddef.h>

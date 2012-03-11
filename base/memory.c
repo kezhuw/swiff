@@ -1,5 +1,6 @@
 #include "memory.h"
 #include "compat.h"
+#include "intreg.h"
 #include "helper.h"
 #include <stddef.h>
 #include <string.h>

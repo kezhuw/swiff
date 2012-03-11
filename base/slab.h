@@ -1,7 +1,10 @@
 #ifndef __SLAB_POOL_H
 #define __SLAB_POOL_H
 #include <stddef.h>
-#include "helper.h"
+#include <stdbool.h>
+
+struct memface;
+
 struct slab;
 struct slab_pool;
 

@@ -1,6 +1,7 @@
 #ifndef __CORE_PLAYER_H
 #define __CORE_PLAYER_H
 #include <base/helper.h>
+#include <base/intreg.h>
 
 struct transform {
 	struct {
