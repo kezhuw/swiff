@@ -1,117 +1,374 @@
 #ifndef __BITVAL_H
 #define __BITVAL_H
 
+#include "compat.h"
+#include "intreg.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
 // Bitval provides utilities to read:
-// 	no more than 4 bytes integer value;
+// 	no more than 32 bits integer value;
 // 	C string value.
 
-// For all functions that take 'bitval_t bv' parameter, assert(bv != NULL).
-// For all read/peek bits functions, error will raise when n > 4*CHAR_BIT.
-// For all read/peek/skip functions, error will raise when there is no enough data.
-// For all read/peek/skip bytes functions, error will raise when bitval_synced() is false.
+// For all functions that take 'struct bitval *bv' parameter, assert(bv != NULL).
+// For all read/peek bits functions, assert(n <= 32).
+// For all read/peek/skip functions, assert there is enough data.
+// For all read/peek/skip bytes functions, assert(bitval_synced(bv)).
 
-typedef int8_t byte1_t;
-typedef int16_t byte2_t;
-typedef int32_t byte3_t;
-typedef int32_t byte4_t;
+// At least 32-bits width.
+typedef uintreg_t buffer_t;
+typedef uintreg_t number_t;
 
-typedef uint8_t ubyte1_t;
-typedef uint16_t ubyte2_t;
-typedef uint32_t ubyte3_t;
-typedef uint32_t ubyte4_t;
+#define ARITHMETIC_SHIFT_RIGHT
 
-// Change [u]byte_fastN_t to capably fastest integer type.
-typedef int_fast32_t byte_fast1_t;
-typedef int_fast32_t byte_fast2_t;
-typedef int_fast32_t byte_fast3_t;
-typedef int_fast32_t byte_fast4_t;
+// XXX Export only for declaration.
+struct bitval {
+	buffer_t buf;		// Valid bits are the highest bits.
+	number_t num;		// Number of valid bits in buf.
+	const uint8_t *ptr;
+	const uint8_t *beg;
+	size_t cnt;
+};
 
-typedef uint_fast32_t ubyte_fast1_t;
-typedef uint_fast32_t ubyte_fast2_t;
-typedef uint_fast32_t ubyte_fast3_t;
-typedef uint_fast32_t ubyte_fast4_t;
+// API {
 
-// At least 4-bytes width.
-typedef byte_fast4_t intbv_t;
-typedef ubyte_fast4_t uintbv_t;
+// Convenient functions {
+static inline intreg_t read_int8(const void *p);
+static inline intreg_t read_int16(const void *p);
+static inline intreg_t read_int32(const void *p);
 
-typedef struct {
-	char _ [10*sizeof(void *)];
-} bitval_t[1];
+static inline uintreg_t read_uint8(const void *p);
+static inline uintreg_t read_uint16(const void *p);
+static inline uintreg_t read_uint32(const void *p);
 
-static inline void
-bitval_copy(bitval_t bv, const bitval_t src) {
-	bv[0] = src[0];
+static inline intreg_t read_bigendian_int8(const void *p);
+static inline intreg_t read_bigendian_int16(const void *p);
+static inline intreg_t read_bigendian_int32(const void *p);
+
+static inline uintreg_t read_bigendian_uint8(const void *p);
+static inline uintreg_t read_bigendian_uint16(const void *p);
+static inline uintreg_t read_bigendian_uint32(const void *p);
+// }
+
+static inline void bitval_init(struct bitval *bv, const void *data, size_t size);
+static inline void bitval_copy(struct bitval *bv, const struct bitval *src);
+
+static inline void bitval_sync(struct bitval *bv);
+static inline bool bitval_synced(const struct bitval *bv);
+
+// Return current reading position.
+// Caller may need to sync bv.
+static inline const void *bitval_cursor(const struct bitval *bv);
+
+void bitval_skip_bits(struct bitval *bv, size_t n);
+static inline void bitval_skip_bytes(struct bitval *bv, size_t n);
+static inline void bitval_jump_bytes(struct bitval *bv, long n);
+
+static inline size_t bitval_number_bits(const struct bitval *bv);
+static inline size_t bitval_number_bytes(const struct bitval *bv);
+static inline bool bitval_ensure_bits(const struct bitval *bv, size_t n);
+static inline bool bitval_ensure_bytes(const struct bitval *bv, size_t n);
+
+const char *bitval_read_string(struct bitval *bv, size_t *lenp);
+static inline const char *bitval_peek_string(const struct bitval *bv, size_t *lenp);
+static inline void bitval_skip_string(struct bitval *bv);
+
+static inline intreg_t bitval_read_bit(struct bitval *bv);
+static inline intreg_t bitval_read_sbits(struct bitval *bv, size_t n);
+static inline uintreg_t bitval_read_ubits(struct bitval *bv, size_t n);
+
+static inline intreg_t bitval_peek_bit(const struct bitval *bv);
+static inline intreg_t bitval_peek_sbits(const struct bitval *bv, size_t n);
+static inline uintreg_t bitval_peek_ubits(const struct bitval *bv, size_t n);
+
+static inline intreg_t bitval_read_int8(struct bitval *bv);
+static inline intreg_t bitval_read_int16(struct bitval *bv);
+static inline intreg_t bitval_read_int32(struct bitval *bv);
+
+static inline uintreg_t bitval_read_uint8(struct bitval *bv);
+static inline uintreg_t bitval_read_uint16(struct bitval *bv);
+static inline uintreg_t bitval_read_uint32(struct bitval *bv);
+
+static inline intreg_t bitval_read_bigendian_int8(struct bitval *bv);
+static inline intreg_t bitval_read_bigendian_int16(struct bitval *bv);
+static inline intreg_t bitval_read_bigendian_int32(struct bitval *bv);
+
+static inline uintreg_t bitval_read_bigendian_uint8(struct bitval *bv);
+static inline uintreg_t bitval_read_bigendian_uint16(struct bitval *bv);
+static inline uintreg_t bitval_read_bigendian_uint32(struct bitval *bv);
+// }
+
+static inline intreg_t
+read_int8(const void *p) {
+	const int8_t *s = p;
+	return s[0];
 }
 
-typedef void (*BitvalErrorFunc_t)(const char *);
+static inline intreg_t
+read_int16(const void *p) {
+	const uint8_t *u = p;
+	const int8_t *s = p;
+	return (u[0] | (s[1]<<8));
+}
 
-void bitval_init(bitval_t bv, const ubyte1_t *data, size_t size, BitvalErrorFunc_t err);
-const ubyte1_t *bitval_getptr(const bitval_t bv);
+static inline intreg_t
+read_int32(const void *p) {
+	const uint8_t *u = p;
+	const int8_t *s = p;
+	return (u[0] | (u[1]<<8) | (u[2]<<16) | (s[3]<<24));
+}
 
-void bitval_sync(bitval_t bv);
-bool bitval_synced(const bitval_t bv);
+static inline uintreg_t
+read_uint8(const void *p) {
+	return ((uint8_t *)p)[0];
+}
 
-void bitval_skip_bits(bitval_t bv, size_t n);
-void bitval_skip_bytes(bitval_t bv, size_t n);
-void bitval_jump_bytes(bitval_t bv, long n);
+static inline uintreg_t
+read_uint16(const void *p) {
+	const uint8_t *u = p;
+	return (u[0] | (u[1] << 8));
+}
 
-size_t bitval_number_bits(const bitval_t bv);
-size_t bitval_number_bytes(const bitval_t bv);
+static inline uintreg_t
+read_uint32(const void *p) {
+	const uint8_t *u = p;
+	return (u[0] | (u[1]<<8) | (u[2]<<16) | (u[3]<<24));
+}
 
-bool bitval_ensure_bits(const bitval_t bv, size_t n);
-bool bitval_ensure_bytes(const bitval_t bv, size_t n);
+static inline intreg_t
+read_bigendian_int8(const void *p) {
+	const int8_t *s = p;
+	return s[0];
+}
 
-const char *bitval_read_string(bitval_t bv, size_t *lenp);
-const char *bitval_peek_string(const bitval_t bv, size_t *lenp);
-void bitval_skip_string(bitval_t bv);
+static inline intreg_t
+read_bigendian_int16(const void *p) {
+	const uint8_t *u = p;
+	const int8_t *s = p;
+	return ((s[0]<<8) | u[1]);
+}
 
-int bitval_read_bit(bitval_t bv);
-intbv_t bitval_read_sbits(bitval_t bv, size_t n);
-uintbv_t bitval_read_ubits(bitval_t bv, size_t n);
+static inline intreg_t
+read_bigendian_int32(const void *p) {
+	const uint8_t *u = p;
+	const int8_t *s = p;
+	return ((s[0]<<24) | (u[1]<<16) | (u[2]<<8) | u[3]);
+}
 
-byte_fast1_t bitval_read_byte1(bitval_t bv);
-byte_fast2_t bitval_read_byte2(bitval_t bv);
-byte_fast3_t bitval_read_byte3(bitval_t bv);
-byte_fast4_t bitval_read_byte4(bitval_t bv);
-ubyte_fast1_t bitval_read_ubyte1(bitval_t bv);
-ubyte_fast2_t bitval_read_ubyte2(bitval_t bv);
-ubyte_fast3_t bitval_read_ubyte3(bitval_t bv);
-ubyte_fast4_t bitval_read_ubyte4(bitval_t bv);
+static inline uintreg_t
+read_bigendian_uint8(const void *p) {
+	const uint8_t *u = p;
+	return u[0];
+}
 
-byte_fast1_t bitval_read_bigendian_byte1(bitval_t bv);
-byte_fast2_t bitval_read_bigendian_byte2(bitval_t bv);
-byte_fast3_t bitval_read_bigendian_byte3(bitval_t bv);
-byte_fast4_t bitval_read_bigendian_byte4(bitval_t bv);
-ubyte_fast1_t bitval_read_bigendian_ubyte1(bitval_t bv);
-ubyte_fast2_t bitval_read_bigendian_ubyte2(bitval_t bv);
-ubyte_fast3_t bitval_read_bigendian_ubyte3(bitval_t bv);
-ubyte_fast4_t bitval_read_bigendian_ubyte4(bitval_t bv);
+static inline uintreg_t
+read_bigendian_uint16(const void *p) {
+	const uint8_t *u = p;
+	return ((u[0]<<8) | u[1]);
+}
+
+static inline uintreg_t
+read_bigendian_uint32(const void *p) {
+	const uint8_t *u = p;
+	return ((u[0]<<24) | (u[1]<<16) | (u[2]<<8) | u[3]);
+}
+
+static inline void
+bitval_init(struct bitval *bv, const void *data, size_t size) {
+	assert(sizeof(intreg_t) >= 4);
+	assert(bv != NULL && data != NULL && size != 0);
+	bv->buf = bv->num = 0;
+	bv->beg = bv->ptr = data;
+	bv->cnt = size;
+}
+
+static inline void
+bitval_copy(struct bitval *bv, const struct bitval *src) {
+	*bv = *src;
+}
+
+static inline const void *
+bitval_cursor(const struct bitval *bv) {
+	assert(bv != NULL);
+	return bv->ptr;
+}
 
 
-int bitval_peek_bit(const bitval_t bv);
-intbv_t bitval_peek_sbits(const bitval_t bv, size_t n);
-uintbv_t bitval_peek_ubits(const bitval_t bv, size_t n);
+static inline void
+bitval_sync(struct bitval *bv) {
+	assert(bv != NULL);
+	bv->ptr -= (bv->num>>3);
+	bv->buf = bv->num = 0;
+}
 
-byte_fast1_t bitval_peek_byte1(const bitval_t bv);
-byte_fast2_t bitval_peek_byte2(const bitval_t bv);
-byte_fast3_t bitval_peek_byte3(const bitval_t bv);
-byte_fast4_t bitval_peek_byte4(const bitval_t bv);
-ubyte_fast1_t bitval_peek_ubyte1(const bitval_t bv);
-ubyte_fast2_t bitval_peek_ubyte2(const bitval_t bv);
-ubyte_fast3_t bitval_peek_ubyte3(const bitval_t bv);
-ubyte_fast4_t bitval_peek_ubyte4(const bitval_t bv);
+static inline bool
+bitval_synced(const struct bitval *bv) {
+	return bv->num == 0;
+}
 
-byte_fast1_t bitval_peek_bigendian_byte1(const bitval_t bv);
-byte_fast2_t bitval_peek_bigendian_byte2(const bitval_t bv);
-byte_fast3_t bitval_peek_bigendian_byte3(const bitval_t bv);
-byte_fast4_t bitval_peek_bigendian_byte4(const bitval_t bv);
-ubyte_fast1_t bitval_peek_bigendian_ubyte1(const bitval_t bv);
-ubyte_fast2_t bitval_peek_bigendian_ubyte2(const bitval_t bv);
-ubyte_fast3_t bitval_peek_bigendian_ubyte3(const bitval_t bv);
-ubyte_fast4_t bitval_peek_bigendian_ubyte4(const bitval_t bv);
+static inline bool
+bitval_ensure_bound(const struct bitval *bv, long n) {
+	if (n >= 0) {
+		return bitval_ensure_bytes(bv, (size_t)n);
+	} else {
+		return bv->ptr+n >= bv->beg;
+	}
+}
+
+static inline size_t
+bitval_remain_bytes(const struct bitval *bv) {
+	return (bv->cnt - (size_t)(bv->ptr-bv->beg));
+}
+
+static inline size_t
+bitval_number_bits(const struct bitval *bv) {
+	return (size_t)(bv->num + bitval_remain_bytes(bv)*8);
+}
+
+static inline size_t
+bitval_number_bytes(const struct bitval *bv) {
+	return (size_t)((bv->num>>3) + bitval_remain_bytes(bv));
+}
+
+static inline bool
+bitval_ensure_bits(const struct bitval *bv, size_t n) {
+	return bitval_number_bits(bv) >= n;
+}
+
+static inline bool
+bitval_ensure_bytes(const struct bitval *bv, size_t n) {
+	return bitval_number_bytes(bv) >= n;
+}
+
+static inline void
+bitval_skip_bytes(struct bitval *bv, size_t n) {
+	assert(bitval_synced(bv));
+	assert(bitval_remain_bytes(bv) >= n);
+	bv->ptr += n;
+}
+
+static inline void
+bitval_jump_bytes(struct bitval *bv, long n) {
+	assert(bitval_synced(bv));
+	assert(bitval_ensure_bound(bv, n));
+	bv->ptr += n;
+}
+
+static inline const char *
+bitval_peek_string(const struct bitval *bv, size_t *lenp) {
+	assert(bv != NULL);
+	struct bitval tmp;
+	bitval_copy(&tmp, bv);
+	return bitval_read_string(&tmp, lenp);
+}
+
+static inline void
+bitval_skip_string(struct bitval *bv) {
+	assert(bv != NULL);
+	size_t len;
+	bitval_read_string(bv, &len);
+}
+
+uintreg_t bitval_read_hbits(struct bitval *bv, size_t n);
+
+uintreg_t
+bitval_read_ubits(struct bitval *bv, size_t n) {
+	assert(bv != NULL);
+	return bitval_read_hbits(bv, n) >> (sizeof(uintreg_t)*8 - n);
+}
+
+intreg_t
+bitval_read_sbits(struct bitval *bv, size_t n) {
+	// XXX The resulting value of right-shift to negative-signed integer is
+	// implementation-defined.
+	assert(bv != NULL);
+#ifdef ARITHMETIC_SHIFT_RIGHT
+	return ((intreg_t)bitval_read_hbits(bv, n)) >> (sizeof(intreg_t)*8 - n);
+#else
+	uintreg_t val = bitval_read_ubits(bv, n);
+	if ((val & (1 << (n-1))) != 0) {
+		val |= ~0 << n;
+	}
+	return val;
+#endif
+}
+
+static inline intreg_t
+bitval_read_bit(struct bitval *bv) {
+	assert(bv != NULL);
+	return (intreg_t)(bitval_read_hbits(bv, 1) >> (sizeof(uintreg_t)*8 - 1));
+}
+
+static inline intreg_t
+bitval_peek_bit(const struct bitval *bv) {
+	assert(bv != NULL);
+	struct bitval tmp;
+	bitval_copy(&tmp, bv);
+	return bitval_read_bit(&tmp);
+}
+
+uintreg_t
+bitval_peek_ubits(const struct bitval *bv, size_t n) {
+	assert(bv != NULL);
+	struct bitval tmp;
+	bitval_copy(&tmp, bv);
+	return bitval_read_ubits(&tmp, n);
+}
+
+intreg_t
+bitval_peek_sbits(const struct bitval *bv, size_t n) {
+	assert(bv != NULL);
+	struct bitval tmp;
+	bitval_copy(&tmp, bv);
+	return bitval_read_sbits(&tmp, n);
+}
+
+#define DEFINE_READ_INTEGER(kind, nbit, type)		\
+static inline type					\
+bitval_read_ ## kind ## nbit (struct bitval *bv) {	\
+	assert(bv != NULL);				\
+	assert(bitval_synced(bv));			\
+	assert(bitval_remain_bytes(bv) >= (nbit>>3));	\
+	type val = read_ ## kind ## nbit (bv->ptr);	\
+	bv->ptr += (nbit>>3);				\
+	return val;					\
+}
+
+#define DEFINE_PEEK_INTEGER(kind, nbit, type)		\
+static inline type					\
+bitval_peek_ ## kind ## nbit (const struct bitval *bv) {\
+	assert(bv != NULL);				\
+	struct bitval tmp = *bv;			\
+	return bitval_read_ ## kind ## nbit (&tmp);	\
+}
+
+DEFINE_READ_INTEGER(uint, 8, uintreg_t)
+DEFINE_READ_INTEGER(uint, 16, uintreg_t)
+DEFINE_READ_INTEGER(uint, 32, uintreg_t)
+DEFINE_READ_INTEGER(int, 8, intreg_t)
+DEFINE_READ_INTEGER(int, 16, intreg_t)
+DEFINE_READ_INTEGER(int, 32, intreg_t)
+DEFINE_READ_INTEGER(bigendian_uint, 8, uintreg_t)
+DEFINE_READ_INTEGER(bigendian_uint, 16, uintreg_t)
+DEFINE_READ_INTEGER(bigendian_uint, 32, uintreg_t)
+DEFINE_READ_INTEGER(bigendian_int, 8, intreg_t)
+DEFINE_READ_INTEGER(bigendian_int, 16, intreg_t)
+DEFINE_READ_INTEGER(bigendian_int, 32, intreg_t)
+
+DEFINE_PEEK_INTEGER(uint, 8, uintreg_t)
+DEFINE_PEEK_INTEGER(uint, 16, uintreg_t)
+DEFINE_PEEK_INTEGER(uint, 32, uintreg_t)
+DEFINE_PEEK_INTEGER(int, 8, intreg_t)
+DEFINE_PEEK_INTEGER(int, 16, intreg_t)
+DEFINE_PEEK_INTEGER(int, 32, intreg_t)
+DEFINE_PEEK_INTEGER(bigendian_uint, 8, uintreg_t)
+DEFINE_PEEK_INTEGER(bigendian_uint, 16, uintreg_t)
+DEFINE_PEEK_INTEGER(bigendian_uint, 32, uintreg_t)
+DEFINE_PEEK_INTEGER(bigendian_int, 8, intreg_t)
+DEFINE_PEEK_INTEGER(bigendian_int, 16, intreg_t)
+DEFINE_PEEK_INTEGER(bigendian_int, 32, intreg_t)
+#undef DEFINE_READ_INTEGER
+#undef DEFINE_PEEK_INTEGER
 #endif
