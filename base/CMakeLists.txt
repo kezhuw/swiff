@@ -7,6 +7,7 @@ set(base_SRCS
   memory.c
   mscope.c
   slab.c
+  cxform.c
   )
 
 add_library(swiff_base ${base_SRCS})

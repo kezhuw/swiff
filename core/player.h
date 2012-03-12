@@ -2,14 +2,13 @@
 #define __CORE_PLAYER_H
 #include <base/helper.h>
 #include <base/intreg.h>
+#include <base/cxform.h>
 
 struct transform {
 	struct {
 		char _[1];
 	} matrix;
-	struct {
-		char _[1];
-	} cxform;
+	struct cxform cxform;
 };
 
 struct string {
