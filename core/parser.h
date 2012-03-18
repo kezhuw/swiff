@@ -10,6 +10,7 @@ struct render;
 struct parser;
 struct transform;
 struct sprite_define;
+struct stream_define;
 struct graph;
 struct memface;
 struct logface;

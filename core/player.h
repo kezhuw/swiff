@@ -3,11 +3,10 @@
 #include <base/helper.h>
 #include <base/intreg.h>
 #include <base/cxform.h>
+#include <base/matrix.h>
 
 struct transform {
-	struct {
-		char _[1];
-	} matrix;
+	struct matrix matrix;
 	struct cxform cxform;
 };
 
@@ -17,6 +16,7 @@ struct string {
 };
 
 struct player;
+struct sprite;
 struct parser;
 struct muface;
 struct memface;
@@ -76,5 +76,8 @@ struct place_info {
 	uintreg_t stepratio;
 	struct string moviename;
 };
+
+void sprite_place_object(struct sprite *si, const struct place_info *pi);
+void sprite_remove_object(struct sprite *si, uintreg_t);
 
 #endif
