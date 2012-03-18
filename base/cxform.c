@@ -44,10 +44,10 @@ cxform_reflag(struct cxform * restrict cx) {
 #define DEFINE_TRANSFORM_RGBA(ttype, ctype)		\
 void cxform_transform_ ## ttype				\
 (const struct cxform *cx, struct ttype *c) {		\
-	long r = (long)c->red;				\
-	long g = (long)c->green;			\
-	long b = (long)c->blue;				\
-	long a = (long)c->alpha;			\
+	long r = (long)c->r;				\
+	long g = (long)c->g;				\
+	long b = (long)c->b;				\
+	long a = (long)c->a;				\
 	switch (cx->flag) {				\
 	case 0:						\
 		return;					\
@@ -87,10 +87,10 @@ void cxform_transform_ ## ttype				\
 	if (b > 255) b = 255;				\
 	if (a > 255) a = 255;				\
 done:							\
-	c->red = (ctype)r;				\
-	c->green = (ctype)g;				\
-	c->blue = (ctype)b;				\
-	c->alpha = (ctype)a;				\
+	c->r = (ctype)r;				\
+	c->g = (ctype)g;				\
+	c->b = (ctype)b;				\
+	c->a = (ctype)a;				\
 }
 
 DEFINE_TRANSFORM_RGBA(rgba8, uint8_t)
