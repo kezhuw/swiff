@@ -2,7 +2,6 @@ set(base_SRCS
   logger.c
   report.c
   except.c
-  assert.c
   bitval.c
   memory.c
   mscope.c
@@ -26,10 +25,6 @@ add_test(base/report report_unittest)
 add_executable(except_unittest except_test.c)
 target_link_libraries(except_unittest swiff_base)
 add_test(base/except except_unittest)
-
-add_executable(assert_unittest assert_test.c)
-target_link_libraries(assert_unittest swiff_base)
-add_test(base/assert assert_unittest)
 
 add_executable(bitval_unittest bitval_test.c)
 target_link_libraries(bitval_unittest swiff_base)
