@@ -27,7 +27,7 @@ struct pxface {
 	void (*delete_graph)(struct parser *px, struct stream *stm, struct render *rd, struct graph *gh);
 
 	void (*struct_sprite)(struct parser *px, struct stream *stm, uintptr_t chptr, struct sprite_define *inf);
-	void (*struct_stream)(struct parser *px, struct stream *stm, const void *ud, struct sprite_define *inf);
+	void (*struct_stream)(struct parser *px, struct stream *stm, const void *ud, struct stream_define *inf);
 	void (*finish_stream)(struct parser *px, struct stream *stm);
 	void (*delete_parser)(struct parser *px);
 };

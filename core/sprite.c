@@ -848,7 +848,11 @@ player_initz(struct player * restrict pl) {
 
 void
 player_load0(struct player *pl, const void *ud, enum stream_type ut) {
-	pl->stream = pl->mux->create_stream(pl->mux->muplex, ud, ut, &pl->define);
+	// XXX How to reflect rate/size to outside ?
+	struct stream_define def;
+	pl->stream = pl->mux->create_stream(pl->mux->muplex, ud, ut, &def);
+	pl->define.nframe = def.nframe;
+	pl->define.tagbeg = def.tagbeg;
 	player_initz(pl);
 }
 

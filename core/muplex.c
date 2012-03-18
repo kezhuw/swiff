@@ -15,7 +15,7 @@ struct muplex {
 };
 
 static struct stream *
-muplex_create_stream(struct muplex *mux, const void *ud, enum stream_type ut, struct sprite_define *inf) {
+muplex_create_stream(struct muplex *mux, const void *ud, enum stream_type ut, struct stream_define *inf) {
 	struct stream *stm = mux->malloc(mux->memctx, sizeof(*stm), __FILE__, __LINE__);
 	stm->type = ut;
 	stm->pxface = mux->default_parser;

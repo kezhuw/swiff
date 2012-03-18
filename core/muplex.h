@@ -14,10 +14,11 @@ struct transform;
 struct stream;
 struct muplex;
 struct sprite_define;
+struct stream_define;
 
 struct muface {
 	struct muplex *muplex;
-	struct stream * (*create_stream)(struct muplex *mux, const void *ud, enum stream_type ut, struct sprite_define *inf);
+	struct stream * (*create_stream)(struct muplex *mux, const void *ud, enum stream_type ut, struct stream_define *inf);
 	void (*delete_stream)(struct muplex *mux, struct stream *stm);
 	void (*delete_muplex)(struct muplex *mux);
 };
