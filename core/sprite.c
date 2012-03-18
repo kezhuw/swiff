@@ -1,6 +1,7 @@
 #include "player.h"
 #include "muplex.h"
 #include "define.h"
+#include "common.h"
 #include <base/compat.h>
 #include <base/intreg.h>
 #include <base/helper.h>
@@ -533,7 +534,7 @@ sprite_delete_object(struct sprite *si, struct object *ob) {
 }
 
 void
-sprite_place_object(struct sprite *si, struct place_info *pi) {
+sprite_place_object(struct sprite *si, const struct place_info *pi) {
 	if ((pi->flag & PlaceFlagMove)) {
 		sprite_change_object(si, pi);
 	} else {

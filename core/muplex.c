@@ -1,6 +1,7 @@
 #include "muplex.h"
 #include "stream.h"
 #include "parser.h"
+#include "common.h"
 #include <base/helper.h>
 
 #include <stdint.h>

@@ -1,6 +1,7 @@
 #ifndef __CORE_MUPLEX_H
 #define __CORE_MUPLEX_H
 
+#include "common.h"
 #include <stdint.h>
 
 struct memface;
@@ -13,13 +14,6 @@ struct transform;
 struct stream;
 struct muplex;
 struct sprite_define;
-
-enum stream_type {
-	StreamInit,
-	StreamData,
-	StreamFile,
-	StreamUdef,
-};
 
 struct muface {
 	struct muplex *muplex;
