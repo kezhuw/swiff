@@ -43,7 +43,7 @@ typedef uint16_t obtype_t;
 	uint16_t clipdepth;			\
 	uint16_t stepratio;			\
 	depth_t depth;				\
-	const struct character *character;	\
+	uintptr_t character;			\
 	struct transform transform;		\
 	struct object *above;			\
 	struct object *parent
@@ -102,11 +102,6 @@ struct source {
 	SourceFields;
 };
 
-static struct thread *
-thread_from_sprite(struct sprite *si) {
-	return &si->thread;
-}
-
 static struct sprite *
 sprite_from_thread(struct thread *td) {
 	return obj2sprite(((char *)td - offsetof(struct sprite, thread)));
@@ -119,8 +114,9 @@ struct player {
 	struct thread *threads;
 	size_t unnamed_instances;
 	struct slab_pool *sapool;
-	struct slab *object_slab[CharacterTotalNumber];
+	struct slab *object_slab[CharacterTypeNumber];
 	struct slab *name_slab[3];
+	struct muface *mux;
 	struct memface *mem;
 	struct logface *log;
 	struct errface *err;
@@ -162,7 +158,7 @@ object_type(const struct object *ob) {
 }
 
 static void
-object_replace_character(struct object *ob, const void *ch, uintreg_t type) {
+object_replace_character(struct object *ob, uintptr_t ch, uintreg_t type) {
 	// FIXME Find out replacement-condition ?
 	uintreg_t oldt = object_type(ob);
 	if (oldt == type && !obtype_scriptable(oldt)) {
@@ -265,7 +261,8 @@ object_change_place(struct object *ob, const struct place_info *pi) {
 
 static inline struct object *
 player_create_object(struct player *pl, uintreg_t type) {
-	// FIXME Sprite/Source ?
+	assert(type < CharacterTypeNumber);
+	assert(pl->object_slab[type] != NULL);
 	struct object *ob = slab_alloc(pl->object_slab[type]);
 	ob->type = (obtype_t)type;
 	return ob;
@@ -326,6 +323,7 @@ player_detach_obname(struct player *pl, struct obname *on) {
 
 static inline void
 player_attach_thread(struct player *pl, struct thread *td) {
+	td->player = pl;
 	td->tdnext = pl->threads;
 	pl->threads = td;
 }
@@ -345,36 +343,7 @@ player_detach_thread(struct player *pl, struct thread *td) {
 
 void
 player_detach_source(struct player *pl, struct source *sc) {
-	player_detach_thread(pl, thread_from_sprite(obj2sprite(sc)));
-}
-
-// Call after completion of object initialization.
-void
-player_attach_object(struct player *pl, struct object *ob) {
-	switch (object_type(ob)) {
-	case CharacterSprite:
-		player_attach_thread(pl, thread_from_sprite(obj2sprite(ob)));
-		player_attach_obname(pl, obj2obname(ob));
-		break;
-	default:
-		break;
-	}
-}
-
-// TODO Source need special dispose ?
-// Call before start of object finalization.
-void
-player_detach_object(struct player *pl, struct object *ob) {
-	// Some objects need player to update surrounding environment such as dragging.
-	// e.g. Edittext, Thread, Button.
-	switch (object_type(ob)) {
-	case CharacterSprite:
-		player_detach_thread(pl, thread_from_sprite(obj2sprite(ob)));
-		player_detach_obname(pl, obj2obname(ob));
-		break;
-	default:
-		break;
-	}
+	player_detach_thread(pl, &sc->thread);
 }
 
 struct source *
@@ -424,13 +393,16 @@ player_search_level(const struct player *pl, uintreg_t lvl) {
 }
 
 static struct player *
-player_from_sprite(const struct sprite *si) {
-	return si->thread.player;
+player_from_thread(const struct thread *td) {
+	return td->player;
 }
+
+static void sprite_advance(struct sprite *si);
+
 
 static bool
 sprite_is_player(const struct sprite *si) {
-	return si == obj2sprite(player_from_sprite(si));
+	return si == obj2sprite(player_from_thread(&si->thread));
 }
 
 static inline bool
@@ -473,13 +445,47 @@ sprite_search_object(struct sprite *si, depth_t depth) {
 	return NULL;
 }
 
+static inline void
+sprite_add_child(struct sprite *si, struct sprite *child) {
+	child->sibling = si->children;
+	si->children = child;
+}
+
+static inline void
+sprite_del_child(struct sprite *si, struct sprite *child) {
+	struct sprite **ss = &si->children;
+	for (; *ss != NULL && *ss != child; ss = &(*ss)->sibling) {
+	}
+	assert(*ss != NULL);
+	*ss = child->sibling;
+}
+
+static inline void
+sprite_initz(struct sprite *si, struct source *sc, struct player *pl) {
+	si->tagpos = si->define.tagbeg;
+	si->source = si->scroot = sc;
+	player_attach_thread(pl, &si->thread);
+	player_attach_obname(pl, obj2obname(si));
+}
+
+static inline void
+sprite_finiz(struct sprite *si) {
+	struct player *pl = player_from_thread(&si->thread);
+	player_detach_thread(pl, &si->thread);
+	player_detach_obname(pl, obj2obname(si));
+}
+
 void
 sprite_attach_object(struct sprite *si, struct object *ob) {
 	switch (object_type(ob)) {
 	case CharacterSprite: {
 		struct sprite *so = obj2sprite(ob);
-		so->sibling = si->children;
-		si->children = so;
+		sprite_add_child(si, so);
+		struct source *sc = si->source;
+		struct stream *stm = sc->stream;
+		stream_struct_sprite(stm, so->character, &so->define);
+		sprite_initz(so, sc, player_from_thread(&si->thread));
+		sprite_advance(so);
 	} break;
 	default:
 		break;
@@ -491,11 +497,8 @@ sprite_detach_object(struct sprite *si, struct object *ob) {
 	switch (object_type(ob)) {
 	case CharacterSprite: {
 		struct sprite *so = obj2sprite(ob);
-		struct sprite **ss = &si->children;
-		for (; *ss != NULL && *ss != so; ss = &(*ss)->sibling) {
-		}
-		assert(*ss != NULL);
-		*ss = so->sibling;
+		sprite_del_child(si, so);
+		sprite_finiz(so);
 	} break;
 	default:
 		break;
@@ -512,12 +515,11 @@ sprite_change_object(struct sprite *si, const struct place_info *pi) {
 
 static struct object *
 sprite_create_object(struct sprite *si, const struct place_info *pi) {
-	struct player *pl = player_from_sprite(si);
+	struct player *pl = player_from_thread(&si->thread);
 	struct object *ob = player_create_object(pl, pi->type);
 	if (ob) {
 		object_import_place(ob, pi);
 		sprite_attach_object(si, ob);
-		player_attach_object(pl, ob);
 		sprite_mount_object(si, ob->depth, ob);
 	}
 	return ob;
@@ -525,9 +527,8 @@ sprite_create_object(struct sprite *si, const struct place_info *pi) {
 
 static void
 sprite_delete_object(struct sprite *si, struct object *ob) {
-	struct player *pl = player_from_sprite(si);
+	struct player *pl = player_from_thread(&si->thread);
 	sprite_detach_object(si, ob);
-	player_detach_object(pl, ob);
 	player_delete_object(pl, ob);
 }
 
@@ -579,7 +580,7 @@ static void
 sprite_remove(struct sprite *si) {
 	struct sprite *parent = obj2sprite(si->parent);
 	if (parent == NULL) {
-		struct player *pl = player_from_sprite(si);
+		struct player *pl = player_from_thread(&si->thread);
 		player_remove_level(pl, si->depth);
 	} else {
 		sprite_remove_object(parent, object_depth((struct object *)si));
@@ -770,7 +771,7 @@ mem2level(const char *ptr, const char *end, uintreg_t *level) {
 
 struct source *
 sprite_search_level(const struct sprite *si, uintreg_t lvl) {
-	return player_search_level(player_from_sprite(si), lvl);
+	return player_search_level(player_from_thread(&si->thread), lvl);
 }
 
 static struct sprite *
@@ -822,4 +823,49 @@ player_advance(struct player *pl) {
 		sprite_advance(sprite_from_thread(td));
 	}
 	// TODO Execute script
+}
+
+static inline void
+player_inita(struct player *pl, struct muface *mux, struct memface *mem, struct logface *log, struct errface *err) {
+	memset(pl, 0, sizeof(*pl));
+	pl->mux = mux;
+	pl->mem = mem;
+	pl->log = log;
+	pl->err = err;
+	pl->unnamed_instances = 0;
+	pl->sapool = NULL;
+	pl->threads = NULL;
+}
+
+static inline void
+player_initz(struct player * restrict pl) {
+	sprite_initz(obj2sprite(pl), obj2source(pl), pl);
+	pl->sapool = slab_pool_create(pl->mem, 10);
+	pl->object_slab[CharacterShape] = slab_pool_alloc(pl->sapool, 20, sizeof(struct shape));
+	pl->object_slab[CharacterSprite] = slab_pool_alloc(pl->sapool, 10, sizeof(struct sprite));
+}
+
+void
+player_load0(struct player *pl, const void *ud, enum stream_type ut) {
+	pl->stream = pl->mux->create_stream(pl->mux->muplex, ud, ut, &pl->define);
+	player_initz(pl);
+}
+
+struct player *
+player_create(struct muface *mux, struct memface *mem, struct logface *log, struct errface *err) {
+	struct player *pl = mem->alloc(mem->ctx, sizeof(*pl), __FILE__, __LINE__);
+	player_inita(pl, mux, mem, log, err);
+	return pl;
+}
+
+void
+player_delete(struct player *pl) {
+	// TODO delete all streams associated with sources.
+	if (pl->stream) {
+		pl->mux->delete_stream(pl->mux->muplex, pl->stream);
+	}
+	if (pl->sapool) {
+		slab_pool_delete(pl->sapool);
+	}
+	pl->mem->dealloc(pl->mem->ctx, pl, __FILE__, __LINE__);
 }

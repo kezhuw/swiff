@@ -18,10 +18,13 @@ struct string {
 
 struct player;
 struct parser;
+struct muface;
+struct memface;
+struct logface;
+struct errface;
 
-// It is parser's responsibility to distinguish discrepancy among streams.
-struct player *player_create(struct parser *ps, struct memface *mc, struct logface *lc, struct errface *ec);
-void player_destroy(struct player *pl);
+struct player *player_create(struct muface *mux, struct memface *mem, struct logface *log, struct errface *err);
+void player_delete(struct player *pl);
 
 void player_load(struct player *pl, const struct string target, void *stream);
 
@@ -60,13 +63,13 @@ enum character_type {
 	CharacterFont,
 	CharacterText,
 	CharacterEditText,
-	CharacterTotalNumber
+	CharacterTypeNumber
 };
 
 struct place_info {
 	uintreg_t flag;
 	uintreg_t type;
-	const void *character;
+	uintptr_t character;
 	struct transform transform;
 	uintreg_t clipdepth;
 	uintreg_t chardepth;
