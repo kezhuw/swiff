@@ -1,4 +1,6 @@
 #include "player.h"
+#include "muplex.h"
+#include "define.h"
 #include <base/compat.h>
 #include <base/intreg.h>
 #include <base/helper.h>
@@ -37,6 +39,7 @@ typedef uint16_t obtype_t;
 	uint16_t forwarding:1;			\
 	uint16_t issource:1;			\
 	uint16_t dirty:1;			\
+	uint16_t stopped:1;			\
 	uint16_t clipdepth;			\
 	uint16_t stepratio;			\
 	depth_t depth;				\
@@ -53,23 +56,20 @@ typedef uint16_t obtype_t;
 	ObnameFields;				\
 	struct thread thread;			\
 	struct object *display;			\
-	size_t nframe;				\
-	size_t cframe;				\
+	struct sprite_define define;		\
+	uintptr_t tagpos;			\
+	intreg_t cframe;			\
 	struct sprite *sibling;			\
 	struct sprite *children;		\
 	struct source *source;			\
 	struct source *scroot;			\
-	const uint8_t *tagbeg;			\
-	const uint8_t *tagpos;			\
-	const uint8_t *tagend;			\
 	bool fastforwarding
 
 struct dictionary;
 
 #define SourceFields				\
 	SpriteFields;				\
-	uintreg_t version;			\
-	struct dictionary *dict
+	struct stream *stream
 
 #define obj2obname(ob)		((struct obname *)(ob))
 #define obj2sprite(ob)		((struct sprite *)(ob))
@@ -112,15 +112,12 @@ sprite_from_thread(struct thread *td) {
 	return obj2sprite(((char *)td - offsetof(struct sprite, thread)));
 }
 
-typedef const uint8_t * (*progress_func_t)(struct sprite *si, const uint8_t *tag);
-
 // Layered-source: chained by 'above', 'depth' is level.
 // player is _level0
 struct player {
 	SourceFields;
 	struct thread *threads;
 	size_t unnamed_instances;
-	progress_func_t progress_frame;
 	struct slab_pool *sapool;
 	struct slab *object_slab[CharacterTotalNumber];
 	struct slab *name_slab[3];
@@ -676,29 +673,28 @@ sprite_stop_fastforward(struct sprite *si) {
 }
 
 static void
-sprite_progress_frames(struct sprite *si, uintreg_t nframe) {
-	struct player *pl = player_from_sprite(si);
-	const uint8_t *tagpos = si->tagpos;
-	progress_func_t progress = pl->progress_frame;
-	if (nframe > 1) {
+sprite_progress_frames(struct sprite *si, uintreg_t n) {
+	uintptr_t tagpos = si->tagpos;
+	struct stream *stm = si->source->stream;
+	if (n > 1) {
 		sprite_start_fastforward(si);
 		do {
-			tagpos = progress(si, tagpos);
-		} while(--nframe > 1);
+			tagpos = stream_progress_frame(stm, si, tagpos);
+		} while(--n > 1);
 		sprite_stop_fastforward(si);
 	}
-	assert(nframe == 1);
-	si->tagpos = progress(si, tagpos);
+	assert(n == 1);
+	si->tagpos = stream_progress_frame(stm, si, tagpos);
 }
 
 static void
-sprite_goto_frame(struct sprite *si, uintreg_t frame) {
+sprite_goto_frame(struct sprite *si, intreg_t frame) {
 	if (frame < si->cframe) {
 		struct object *old = si->display;
 		si->display = NULL;
-		si->cframe = 0;
-		si->tagpos = si->tagbeg;
-		sprite_progress_frames(si, frame);
+		si->cframe = -1;
+		si->tagpos = si->define.tagbeg;
+		sprite_progress_frames(si, frame+1);
 		sprite_merge_old(si, old);
 	} else if (frame > si->cframe) {
 		sprite_progress_frames(si, frame-si->cframe);
@@ -708,7 +704,13 @@ sprite_goto_frame(struct sprite *si, uintreg_t frame) {
 
 static void
 sprite_advance(struct sprite *si) {
-	sprite_goto_frame(si, si->cframe+1);
+	if (!si->stopped) {
+		intreg_t to = si->cframe+1;
+		if (to == si->define.nframe) {
+			to = 0;
+		}
+		sprite_goto_frame(si, to);
+	}
 }
 
 #define string_build(str, len)		&(struct string){.str=str, .len=len}
