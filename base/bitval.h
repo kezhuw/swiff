@@ -98,6 +98,12 @@ static inline intreg_t bitval_read_bigendian_int32(struct bitval *bv);
 static inline uintreg_t bitval_read_bigendian_uint8(struct bitval *bv);
 static inline uintreg_t bitval_read_bigendian_uint16(struct bitval *bv);
 static inline uintreg_t bitval_read_bigendian_uint32(struct bitval *bv);
+
+static inline size_t bitval_meter_ubits(uintreg_t val);
+static inline size_t bitval_meter_sbits(intreg_t val);
+static inline void bitval_write_sbits(struct bitval *bv, intreg_t val, size_t n);
+void bitval_write_ubits(struct bitval *bv, uintreg_t val, size_t n);
+void bitval_flush_write(struct bitval *bv);
 // }
 
 static inline intreg_t
@@ -323,6 +329,31 @@ bitval_peek_sbits(const struct bitval *bv, size_t n) {
 	struct bitval tmp;
 	bitval_copy(&tmp, bv);
 	return bitval_read_sbits(&tmp, n);
+}
+
+size_t bitval_meter_nbits(uintreg_t val);
+
+static inline size_t
+bitval_meter_ubits(uintreg_t val) {
+	if (val == 0) return 1;
+	return bitval_meter_nbits(val);
+}
+
+static inline size_t
+bitval_meter_sbits(intreg_t val) {
+	if (val == 0 || val == -1) return 1;
+	if (val > 0) {
+		return bitval_meter_nbits(val)+1;
+	} else {
+		return bitval_meter_nbits(~val)+1;
+	}
+}
+
+void bitval_write_ubits(struct bitval *bv, uintreg_t val, size_t n);
+
+static inline void
+bitval_write_sbits(struct bitval *bv, intreg_t val, size_t n) {
+	bitval_write_ubits(bv, (uintreg_t)val, n);
 }
 
 #define DEFINE_READ_INTEGER(kind, nbit, type)		\

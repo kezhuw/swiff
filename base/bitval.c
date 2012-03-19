@@ -64,6 +64,84 @@ bitval_fill_hibuf(struct bitval *bv) {
 	bv->num = num;
 }
 
+#define NBYTE	(sizeof(uintreg_t))
+#define METER(val, nbit, bit4)		\
+uintreg_t __v = val;			\
+if (__v != 0) {				\
+	uintreg_t hi = __v >> 4;	\
+	if (hi != 0) {			\
+		nbit -= bit4[hi];	\
+		break;			\
+	}				\
+	nbit -= 4 + bit4[__v & 0x0F];	\
+}					\
+nbit -= 8
+
+size_t
+bitval_meter_nbits(uintreg_t val) {
+	size_t bit4[0x0F] = {4, 3, 2, 2, 1, 1, 1, 1, 0, };
+	union {
+		uintreg_t val;
+		uint8_t bytes[NBYTE];
+	} u;
+	u.val = val;
+	size_t nbit = NBYTE*8;
+#if BYTE_ORDER == LITTLE_ENDIAN
+	size_t i=NBYTE;
+	while (i--) {
+		METER(u.bytes[i], nbit, bit4);
+	}
+#elif BYTE_ORDER == BIG_ENDIAN
+	for (size_t i=0; i<NBYTE; i++) {
+		METER(u.bytes[i], nbit, bit4);
+	}
+#else
+#error specify byte order(BYTE_ORDER <= LITTLE_ENDIAN or BIG_ENDIAN)
+#endif
+	return nbit;
+}
+
+void
+bitval_flush_write(struct bitval *bv) {
+	size_t num = (bv->num+7) & ~0x07;
+	assert(num%8 == 0);
+	if (num != 0) {
+		buffer_t buf = bv->buf;
+		uint8_t *ptr = (void*)bv->ptr;
+		do {
+			*ptr++ = (uint8_t)(buf >> (sizeof(buffer_t)*8 - 8));
+			num -= 8;
+		} while (num != 0);
+		bv->buf = 0;
+		bv->num = 0;
+		bv->ptr = ptr;
+	}
+}
+
+void
+bitval_write_ubits(struct bitval *bv, uintreg_t val, size_t n) {
+	assert(sizeof(buffer_t) >= sizeof(uintreg_t));
+	buffer_t v = ((buffer_t)val) << (sizeof(buffer_t)*8 - n);
+	size_t num = bv->num;
+	while (n != 0) {
+		size_t wrt = sizeof(buffer_t)*8 - num;
+		if (wrt == 0) {
+			bitval_flush_write(bv);
+			num = 0;
+			wrt = sizeof(buffer_t)*8;
+		}
+		if (n < wrt) {
+			wrt = n;
+		}
+		assert(wrt == n || num+wrt == sizeof(buffer_t)*8);
+		bv->buf |= v>>num;
+		v <<= wrt;
+		n -= wrt;
+		num += wrt;
+	}
+	bv->num = num;
+}
+
 // Read n bits to highest bits of return value.
 uintreg_t
 bitval_read_hbits(struct bitval *bv, size_t n) {
