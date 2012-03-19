@@ -22,10 +22,11 @@ void matrix_identify(struct matrix *mx);
 void matrix_concat(struct matrix *mx, const struct matrix *in);
 void matrix_invert(struct matrix *mx);
 
-coord_t matrix_transform_xcoord(struct matrix *mx, const struct point *pt);
-coord_t matrix_transform_ycoord(struct matrix *mx, const struct point *pt);
-void matrix_transform_point(struct matrix *mx, struct point *pt);
+coord_t matrix_transform_xcoord(const struct matrix *mx, const struct point *pt);
+coord_t matrix_transform_ycoord(const struct matrix *mx, const struct point *pt);
+void matrix_transform_point(const struct matrix *mx, struct point *pt);
 
 struct bitval;
 void bitval_read_matrix(struct bitval *bv, struct matrix *mx);
+void bitval_skip_matrix(struct bitval *bv);
 #endif

@@ -4,21 +4,21 @@
 #include <stddef.h>
 
 coord_t
-matrix_transform_xcoord(struct matrix *mx, const struct point *pt) {
+matrix_transform_xcoord(const struct matrix *mx, const struct point *pt) {
 	coord_t x = fixed_mul(mx->sx, pt->x) + mx->tx;
 	if (mx->shy != 0) x += fixed_mul(mx->shy, pt->y);
 	return x;
 }
 
 coord_t
-matrix_transform_ycoord(struct matrix *mx, const struct point *pt) {
+matrix_transform_ycoord(const struct matrix *mx, const struct point *pt) {
 	coord_t y = fixed_mul(mx->sy, pt->y) + mx->ty;
 	if (mx->shx != 0) y += fixed_mul(mx->shx, pt->x);
 	return y;
 }
 
 void
-matrix_transform_point(struct matrix *mx, struct point *pt) {
+matrix_transform_point(const struct matrix *mx, struct point *pt) {
 	coord_t x = matrix_transform_xcoord(mx, pt);
 	coord_t y = matrix_transform_xcoord(mx, pt);
 	pt->x = x;
@@ -78,4 +78,19 @@ bitval_read_matrix(struct bitval *bv, struct matrix *mx) {
 	n = bitval_read_ubits(bv, 5);
 	mx->tx = bitval_read_sbits(bv, n);
 	mx->ty = bitval_read_sbits(bv, n);
+}
+
+void
+bitval_skip_matrix(struct bitval *bv) {
+	size_t n;
+	if (bitval_read_bit(bv)) {
+		n = bitval_read_ubits(bv, 5);
+		bitval_skip_bits(bv, 2*n);
+	}
+	if (bitval_read_bit(bv)) {
+		n = bitval_read_ubits(bv, 5);
+		bitval_skip_bits(bv, 2*n);
+	}
+	n = bitval_read_ubits(bv, 5);
+	bitval_skip_bits(bv, 2*n);
 }
