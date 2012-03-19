@@ -360,7 +360,7 @@ struct style {
 };
 
 struct palette {
-	struct palette *next;
+	struct palette *next;	// First field!
 	size_t ncolor;
 	union color *colors[];
 };
@@ -371,6 +371,10 @@ struct graph {
 	struct palette *fillset;
 };
 
+struct state;
+
+typedef union color * (*GetColorFunc_t)(struct state *st, size_t idx, struct render *rd, enum color_type type);
+
 struct state {
 	struct palette **fillptr;
 	struct palette **lineptr;
@@ -378,8 +382,8 @@ struct state {
 	enum swftag tag;
 	const struct transform *txform;
 	void (*read_rgba8)(struct bitval *bv, struct rgba8 *c);
-	union color * (*get_fillcolor)(struct state *st, struct render *rd, size_t idx, enum color_type type);
-	union color * (*get_linecolor)(struct state *st, struct render *rd, size_t idx, enum color_type type);
+	GetColorFunc_t get_fillcolor;
+	GetColorFunc_t get_linecolor;
 };
 
 static inline void
@@ -457,6 +461,12 @@ _state_get_linestyles(struct state *st) {
 	return (struct style *)&pa->colors[pa->ncolor];
 }
 
+static inline bool
+state_more_palette(struct state *st) {
+	struct palette *pa = *(st->fillptr);
+	return pa != NULL;
+}
+
 static inline union color *
 state_index_fillcolor(struct state *st, size_t idx) {
 	union color **cos = _state_get_fillcolors(st);
@@ -476,35 +486,21 @@ state_index_linestyle(struct state *st, size_t idx) {
 }
 
 static union color *
-state_new_fillcolor(struct state *st, struct render *rd, size_t idx, enum color_type type) {
+state_new_fillcolor(struct state *st, size_t idx, struct render *rd, enum color_type type) {
 	union color **cos = _state_get_fillcolors(st);
 	cos[idx] = render_malloc_color(rd, type);
 	return cos[idx];
 }
 
 static union color *
-state_get_fillcolor(struct state *st, struct render *rd, size_t idx, enum color_type type) {
-	(void)rd; (void)type;
-	union color **cos = _state_get_fillcolors(st);
-	return cos[idx];
-}
-
-static union color *
-state_new_linecolor(struct state *st, struct render *rd, size_t idx, enum color_type type) {
+state_new_linecolor(struct state *st, size_t idx, struct render *rd, enum color_type type) {
 	union color **cos = _state_get_linecolors(st);
 	cos[idx] = render_malloc_color(rd, type);
-	return cos[idx];
-}
-
-static union color *
-state_get_linecolor(struct state *st, struct render *rd, size_t idx, enum color_type type) {
-	(void)rd; (void)type;
-	union color **cos = _state_get_linecolors(st);
 	return cos[idx];
 }
 
 static inline void
-bitval_read_raw_rgba8_without_alpha(struct bitval *bv, struct rgba8 *c) {
+bitval_read_rgba8_non_alpha(struct bitval *bv, struct rgba8 *c) {
 	c->r = (uint8_t)bitval_read_uint8(bv);
 	c->g = (uint8_t)bitval_read_uint8(bv);
 	c->b = (uint8_t)bitval_read_uint8(bv);
@@ -512,7 +508,7 @@ bitval_read_raw_rgba8_without_alpha(struct bitval *bv, struct rgba8 *c) {
 }
 
 static inline void
-bitval_read_raw_rgba8(struct bitval *bv, struct rgba8 *c) {
+bitval_read_rgba8(struct bitval *bv, struct rgba8 *c) {
 	c->r = (uint8_t)bitval_read_uint8(bv);
 	c->g = (uint8_t)bitval_read_uint8(bv);
 	c->b = (uint8_t)bitval_read_uint8(bv);
@@ -526,12 +522,12 @@ state_init_struct(struct state *st, struct graph *gh, const struct transform *ts
 	st->texture = &gh->texture;
 	st->tag = tag;
 	st->txform = tsm;
-	st->read_rgba8 = bitval_read_raw_rgba8_without_alpha;
+	st->read_rgba8 = bitval_read_rgba8_non_alpha;
 	if (tag >= SwftagDefineShape3) {
-		st->read_rgba8 = bitval_read_raw_rgba8;
+		st->read_rgba8 = bitval_read_rgba8;
 	}
-	st->get_fillcolor = state_new_fillcolor;
-	st->get_linecolor = state_new_linecolor;
+	st->get_fillcolor = (GetColorFunc_t)state_new_fillcolor;
+	st->get_linecolor = (GetColorFunc_t)state_new_linecolor;
 }
 
 static inline void
@@ -541,24 +537,24 @@ state_init_change(struct state *st, struct graph *gh, const struct transform *ts
 	st->texture = &gh->texture;
 	st->tag = tag;
 	st->txform = tsm;
-	st->read_rgba8 = bitval_read_raw_rgba8_without_alpha;
+	st->read_rgba8 = bitval_read_rgba8_non_alpha;
 	if (tag >= SwftagDefineShape3) {
-		st->read_rgba8 = bitval_read_raw_rgba8;
+		st->read_rgba8 = bitval_read_rgba8;
 	}
-	st->get_fillcolor = state_get_fillcolor;
-	st->get_linecolor = state_get_linecolor;
+	st->get_fillcolor = (GetColorFunc_t)state_index_fillcolor;
+	st->get_linecolor = (GetColorFunc_t)state_index_linecolor;
 }
 
 // Read cxformed color.
 static inline void
-bitval_read_rgba8(struct bitval *bv, struct rgba8 *c, struct state *st) {
+bitval_read_rgba8_state(struct bitval *bv, struct rgba8 *c, struct state *st) {
 	st->read_rgba8(bv, c);
 	cxform_transform_rgba8(&st->txform->cxform, c);
 }
 
 // XXX How to write back transparent info ?
 static inline void
-bitval_read_gradient(struct bitval *bv, struct gradient *gd, struct state *st) {
+bitval_read_gradient_state(struct bitval *bv, struct gradient *gd, struct state *st) {
 	bool transparent;
 	struct rgba8 colori, colorz;
 	intreg_t ratioi;
@@ -575,7 +571,7 @@ bitval_read_gradient(struct bitval *bv, struct gradient *gd, struct state *st) {
 
 	n = bitval_read_uint8(bv);
 	ratioi = bitval_read_uint8(bv);
-	bitval_read_rgba8(bv, &colori, st);
+	bitval_read_rgba8_state(bv, &colori, st);
 	transparent = colori.a < 255;
 	for (i=0; i<=ratioi; i++) {	// inclusive
 		ramps[i] = colori;
@@ -583,7 +579,7 @@ bitval_read_gradient(struct bitval *bv, struct gradient *gd, struct state *st) {
 	r = colori.r<<16; g = colori.g<<16; b = colori.b<<16; a =colori.a<<16;
 	for (i=1; i<n; i++) {
 		intreg_t ratioz = bitval_read_uint8(bv);
-		bitval_read_rgba8(bv, &colorz, st);
+		bitval_read_rgba8_state(bv, &colorz, st);
 		transparent |= colorz.a < 255;
 		if (ratioz > ratioi) {
 			intreg_t ratiod = ratioz - ratioi;
@@ -626,15 +622,15 @@ parser_struct_palette(struct parser *px, struct render *rd, struct bitval *bv, s
 	state_new_fills(st, px, n);
 	for (i=1; i<=n; i++) {
 		uintreg_t type = bitval_read_uint8(bv);
-		union color *co = st->get_fillcolor(st, rd, i, fill2color(type));
+		union color *co = st->get_fillcolor(st, i, rd, fill2color(type));
 		switch (type) {
 		case FillStyleSolid:
-			bitval_read_rgba8(bv, &co->solid, st);
+			bitval_read_rgba8_state(bv, &co->solid, st);
 			break;
 		case FillStyleLinearGradient:
 		case FillStyleRadialGradient:
 		case FillStyleFocalRadialGradient:
-			bitval_read_gradient(bv, &co->gradient, st);
+			bitval_read_gradient_state(bv, &co->gradient, st);
 			break;
 		case FillStyleRepeatingBitmap:
 		case FillStyleClippedBitmap:
@@ -652,8 +648,8 @@ parser_struct_palette(struct parser *px, struct render *rd, struct bitval *bv, s
 	struct style *li = state_new_lines(st, px, n);
 	for (i=1; i<=n; i++) {
 		li[i].width = bitval_read_uint16(bv);
-		union color *co = st->get_linecolor(st, rd, i, ColorTypeSolid);
-		bitval_read_rgba8(bv, &co->solid, st);
+		union color *co = st->get_linecolor(st, i, rd, ColorTypeSolid);
+		bitval_read_rgba8_state(bv, &co->solid, st);
 	}
 }
 
@@ -767,6 +763,57 @@ parser_struct_texture(struct parser *px, struct render *rd, struct bitval *bv, s
 	}
 }
 
+static void
+parser_search_palette(struct parser *px, struct render *rd, struct bitval *bv, struct state *st) {
+	if (st->tag != SwftagDefineShape2 || st->tag != SwftagDefineShape3) {
+		return;
+	}
+	if (!state_more_palette(st)) {
+		return;
+	}
+	size_t nfillbits, nlinebits;
+	READ_NUM_BITS(bv, nfillbits, nlinebits);
+	for (;;) {
+		uintreg_t flag = bitval_read_ubits(bv, 6);
+		if (flag == 0) {
+			return;
+		} else if ((flag & RecordTypeEdge) == 0) {
+			if ((flag & RecordStateMoveTo)) {
+				size_t n = bitval_read_ubits(bv, 5);
+				bitval_skip_bits(bv, 2*n);
+			}
+			if ((flag & RecordStateFillStyle0)) {
+				bitval_skip_bits(bv, nfillbits);
+			}
+			if ((flag & RecordStateFillStyle1)) {
+				bitval_skip_bits(bv, nfillbits);
+			}
+			if ((flag & RecordStateLineStyle)) {
+				bitval_skip_bits(bv, nlinebits);
+			}
+			if ((flag & RecordStateNewStyles)) {
+				parser_struct_palette(px, rd, bv, st);
+				if (!state_more_palette(st)) {
+					return;
+				}
+				READ_NUM_BITS(bv, nfillbits, nlinebits);
+			}
+		} else {
+			size_t n = (size_t)((flag & 0x0F) + 2);
+			if ((flag & RecordEdgeLine) == 0) {
+				bitval_skip_bits(bv, 4*n);
+			} else {
+				bool general;
+				if ((general = bitval_read_bit(bv))) {
+					bitval_skip_bits(bv, 2*n);
+				} else {
+					bitval_skip_bits(bv, n+1);
+				}
+			}
+		}
+	}
+}
+
 static inline struct graph *
 parser_malloc_graph(struct parser *px) {
 	return parser_malloc(px, sizeof(struct graph), __FILE__, __LINE__);
@@ -803,23 +850,34 @@ parser_struct_graph(struct parser *px, struct stream *stm, struct render *rd, co
 
 static struct graph *
 parser_change_graph(struct parser *px, struct stream *stm, struct render *rd, const struct transform *tsm, uintptr_t chptr, struct graph *gh) {
-	(void)px; (void)stm; (void)rd; (void)tsm; (void)chptr; (void)gh;
-	return NULL;
+	(void)stm;
+	assert(gh != NULL);
+	const struct character *ch = (void*)chptr;
+	struct state st;
+	state_init_change(&st, gh, tsm, ch->tag);
+	struct bitval bv[1];
+	bitval_init(bv, (void*)ch->data, (size_t)-1);
+	parser_struct_palette(px, rd, bv, &st);
+	parser_search_palette(px, rd, bv, &st);
+	return gh;
 }
 
 static void
 parser_render_graph(struct parser *px, struct stream *stm, struct render *rd, struct graph *gh) {
-	(void)px; (void)stm; (void)rd; (void)gh;
+	(void)px; (void)stm;
+	render_commit_texture(rd, gh->texture);
 }
 
 static void
 parser_delete_graph(struct parser *px, struct stream *stm, struct render *rd, struct graph *gh) {
-	(void)px; (void)stm; (void)rd; (void)gh;
+	(void)stm;
+	graph_fini(gh, px, rd);
+	parser_dealloc_graph(px, gh);
 }
 
 void
 parser_delete_default(struct parser *px) {
-	(void)px;
+	parser_dealloc(px, px, __FILE__, __LINE__);
 }
 
 struct pxface *
