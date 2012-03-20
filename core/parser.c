@@ -545,15 +545,17 @@ state_init_change(struct state *st, struct graph *gh, const struct transform *ts
 	st->get_linecolor = (GetColorFunc_t)state_index_linecolor;
 }
 
+#define rgba8_transparent(c)	((c)->a < 255)
+
 // Read cxformed color.
-static inline void
+static inline bool
 bitval_read_rgba8_state(struct bitval *bv, struct rgba8 *c, struct state *st) {
 	st->read_rgba8(bv, c);
 	cxform_transform_rgba8(&st->txform->cxform, c);
+	return rgba8_transparent(c);
 }
 
-// XXX How to write back transparent info ?
-static inline void
+static inline bool
 bitval_read_gradient_state(struct bitval *bv, struct gradient *gd, struct state *st) {
 	bool transparent;
 	struct rgba8 colori, colorz;
@@ -571,16 +573,14 @@ bitval_read_gradient_state(struct bitval *bv, struct gradient *gd, struct state 
 
 	n = bitval_read_uint8(bv);
 	ratioi = bitval_read_uint8(bv);
-	bitval_read_rgba8_state(bv, &colori, st);
-	transparent = colori.a < 255;
+	transparent = bitval_read_rgba8_state(bv, &colori, st);
 	for (i=0; i<=ratioi; i++) {	// inclusive
 		ramps[i] = colori;
 	}
 	r = colori.r<<16; g = colori.g<<16; b = colori.b<<16; a =colori.a<<16;
 	for (i=1; i<n; i++) {
 		intreg_t ratioz = bitval_read_uint8(bv);
-		bitval_read_rgba8_state(bv, &colorz, st);
-		transparent |= colorz.a < 255;
+		transparent |= bitval_read_rgba8_state(bv, &colorz, st);
 		if (ratioz > ratioi) {
 			intreg_t ratiod = ratioz - ratioi;
 			intreg_t dr, dg, db, da;
@@ -604,6 +604,7 @@ bitval_read_gradient_state(struct bitval *bv, struct gradient *gd, struct state 
 	for (i=ratioi+1; i<256; i++) {
 		ramps[i] = colori;
 	}
+	return transparent;
 }
 
 static size_t
@@ -623,14 +624,16 @@ parser_struct_palette(struct parser *px, struct render *rd, struct bitval *bv, s
 	for (i=1; i<=n; i++) {
 		uintreg_t type = bitval_read_uint8(bv);
 		union color *co = st->get_fillcolor(st, i, rd, fill2color(type));
+		struct cinfo ci;
+		ci.transparent = false;
 		switch (type) {
 		case FillStyleSolid:
-			bitval_read_rgba8_state(bv, &co->solid, st);
+			ci.transparent = bitval_read_rgba8_state(bv, &co->solid, st);
 			break;
 		case FillStyleLinearGradient:
 		case FillStyleRadialGradient:
 		case FillStyleFocalRadialGradient:
-			bitval_read_gradient_state(bv, &co->gradient, st);
+			ci.transparent = bitval_read_gradient_state(bv, &co->gradient, st);
 			break;
 		case FillStyleRepeatingBitmap:
 		case FillStyleClippedBitmap:
@@ -643,6 +646,7 @@ parser_struct_palette(struct parser *px, struct render *rd, struct bitval *bv, s
 		default:
 			break;
 		}
+		render_change_cinfo(rd, co, &ci);
 	}
 	n = bitval_read_count(bv, st);
 	struct style *li = state_new_lines(st, px, n);

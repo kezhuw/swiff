@@ -40,6 +40,11 @@ enum color_type {
 union color *render_malloc_color(struct render *rd, enum color_type type);
 void render_dealloc_color(struct render *rd, union color *co);
 
+struct cinfo {
+	bool transparent;
+};
+void render_change_cinfo(struct render *rd, union color *co, struct cinfo *ci);
+
 void render_set_fillcolor(struct render *rd, union color *fill0, union color *fill1);
 void render_set_linewidth(struct render *rd, uintreg_t width);
 
