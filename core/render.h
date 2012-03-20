@@ -31,9 +31,11 @@ union color {
 };
 
 enum color_type {
-	ColorTypeSolid,
+	ColorTypeMinimum,
+	ColorTypeSolid = ColorTypeMinimum,
 	ColorTypeLinearGradient,
 	ColorTypeRadialGradient,
+	ColorTypeNumber
 };
 
 // XXX If type is Gradient, return value's invmat is a revert matrix.
