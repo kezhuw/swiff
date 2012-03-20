@@ -52,7 +52,9 @@ static inline uintreg_t read_bigendian_uint16(const void *p);
 static inline uintreg_t read_bigendian_uint32(const void *p);
 // }
 
-static inline void bitval_init(struct bitval *bv, const void *data, size_t size);
+typedef void byte_t;
+
+static inline void bitval_init(struct bitval *bv, const byte_t *data, size_t size);
 static inline void bitval_copy(struct bitval *bv, const struct bitval *src);
 
 static inline void bitval_sync(struct bitval *bv);
