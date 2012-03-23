@@ -71,7 +71,7 @@ bitval_test_integer(const char *name, const uint8_t *data, size_t size, uint32_t
 
 	uint32_t val, n;
 	bitval_t b;
-	bitval_init(b, (byte_t*)data, size);
+	bitval_init_read(b, (byte_t*)data, size);
 	assert(bitval_ensure_bytes(b, size));
 
 	val = (uint32_t)bitval_peek_bit(b);
@@ -241,6 +241,277 @@ bitval_test_integer(const char *name, const uint8_t *data, size_t size, uint32_t
 	integer_compare(head, "read", val, 30, cmp);
 }
 
+static void
+bitval_test_write(const char *name, const uint8_t *data, size_t size) {
+	static char head[1024];
+	snprintf(head, sizeof(head), "bitval_test_write[%s]", name);
+
+	intreg_t sval;
+	uintreg_t uval, n;
+
+	bitval_t reader;
+	bitval_init_read(reader, (byte_t*)data, size);
+	assert(bitval_ensure_bytes(reader, size));
+
+	byte_t *dst = malloc(size);
+	bitval_t writer;
+	bitval_init_write(writer, dst, size);
+
+	uval = bitval_read_ubits(reader, 1);
+	bitval_write_ubits(writer, uval, 1);
+
+	sval = bitval_read_sbits(reader, 5);
+	bitval_write_sbits(writer, sval, 5);
+
+	bitval_sync(reader);
+	bitval_sync(writer);
+
+	uval = bitval_read_bigendian_uint16(reader);
+	bitval_write_bigendian_uint16(writer, uval);
+
+	sval = bitval_read_sbits(reader, 5);
+	bitval_write_sbits(writer, sval, 5);
+
+	uval = bitval_read_ubits(reader, 7);
+	bitval_write_ubits(writer, uval, 7);
+
+	bitval_sync(reader);
+	bitval_sync(writer);
+
+	uval = bitval_read_ubits(reader, 4);
+	bitval_write_ubits(writer, uval, 4);
+
+	n = uval;
+	sval = bitval_read_sbits(reader, n);
+	bitval_write_sbits(writer, sval, n);
+
+	sval = bitval_read_sbits(reader, n);
+	bitval_write_sbits(writer, sval, n);
+
+	bitval_sync(reader);
+	bitval_sync(writer);
+
+	sval = bitval_read_int32(reader);
+	bitval_write_int32(writer, sval);
+
+	sval = bitval_read_sbits(reader, 24);
+	bitval_write_sbits(writer, sval, 24);
+
+	uval = bitval_read_ubits(reader, 30);
+	bitval_write_ubits(writer, uval, 30);
+
+	bitval_sync(reader);
+	bitval_sync(writer);
+
+	sval = bitval_read_int8(reader);
+	bitval_write_int8(writer, sval);
+
+	sval = bitval_read_int16(reader);
+	bitval_write_int16(writer, sval);
+
+	sval = bitval_read_int16(reader);
+	bitval_write_int16(writer, sval);
+
+	sval = bitval_read_int8(reader);
+	bitval_write_int8(writer, sval);
+
+	sval = bitval_read_int32(reader);
+	bitval_write_int32(writer, sval);
+
+	uval = bitval_read_uint8(reader);
+	bitval_write_uint8(writer, uval);
+
+	uval = bitval_read_uint16(reader);
+	bitval_write_uint16(writer, uval);
+
+	uval = bitval_read_uint8(reader);
+	bitval_write_uint8(writer, uval);
+
+	uval = bitval_read_uint16(reader);
+	bitval_write_uint16(writer, uval);
+
+	uval = bitval_read_uint32(reader);
+	bitval_write_uint32(writer, uval);
+
+	sval = bitval_read_bigendian_int8(reader);
+	bitval_write_bigendian_int8(writer, sval);
+
+	sval = bitval_read_bigendian_int16(reader);
+	bitval_write_bigendian_int16(writer, sval);
+
+	sval = bitval_read_bigendian_int16(reader);
+	bitval_write_bigendian_int16(writer, sval);
+
+	sval = bitval_read_bigendian_int8(reader);
+	bitval_write_bigendian_int8(writer, sval);
+
+	sval = bitval_read_bigendian_int32(reader);
+	bitval_write_bigendian_int32(writer, sval);
+
+	uval = bitval_read_bigendian_uint8(reader);
+	bitval_write_bigendian_uint8(writer, uval);
+
+	uval = bitval_read_bigendian_uint16(reader);
+	bitval_write_bigendian_uint16(writer, uval);
+
+	uval = bitval_read_bigendian_uint16(reader);
+	bitval_write_bigendian_uint16(writer, uval);
+
+	uval = bitval_read_bigendian_uint8(reader);
+	bitval_write_bigendian_uint8(writer, uval);
+
+	uval = bitval_read_bigendian_uint32(reader);
+	bitval_write_bigendian_uint32(writer, uval);
+
+	assert(bitval_remain_bytes(reader) == bitval_remain_bytes(writer));
+	size_t len = size - bitval_remain_bytes(writer);
+	if (memcmp(data, dst, len) != 0) {
+		intreg_t rsval, wsval;
+		uintreg_t ruval, wuval;
+
+		bitval_init_read(reader, (byte_t*)data, size);
+		bitval_init_read(writer, dst, size);
+
+		ruval = bitval_read_ubits(reader, 1);
+		wuval = bitval_read_ubits(writer, 1);
+		assert(ruval == wuval);
+
+		rsval = bitval_read_sbits(reader, 5);
+		wsval = bitval_read_sbits(writer, 5);
+		assert(rsval == wsval);
+
+		bitval_sync(reader);
+		bitval_sync(writer);
+
+		ruval = bitval_read_bigendian_uint16(reader);
+		wuval = bitval_read_bigendian_uint16(writer);
+		assert(ruval == wuval);
+
+		rsval = bitval_read_sbits(reader, 5);
+		wsval = bitval_read_sbits(writer, 5);
+		assert(rsval == wsval);
+
+		ruval = bitval_read_ubits(reader, 7);
+		wuval = bitval_read_ubits(writer, 7);
+		assert(ruval == wuval);
+
+		bitval_sync(reader);
+		bitval_sync(writer);
+
+		ruval = bitval_read_ubits(reader, 4);
+		wuval = bitval_read_ubits(writer, 4);
+		assert(ruval == wuval);
+
+		n = ruval;
+		rsval = bitval_read_sbits(reader, n);
+		wsval = bitval_read_sbits(writer, n);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_sbits(reader, n);
+		wsval = bitval_read_sbits(writer, n);
+		assert(rsval == wsval);
+
+		bitval_sync(reader);
+		bitval_sync(writer);
+
+		rsval = bitval_read_int32(reader);
+		wsval = bitval_read_int32(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_sbits(reader, 24);
+		wsval = bitval_read_sbits(writer, 24);
+		assert(rsval == wsval);
+
+		ruval = bitval_read_ubits(reader, 30);
+		wuval = bitval_read_ubits(writer, 30);
+		assert(ruval == wuval);
+
+		bitval_sync(reader);
+		bitval_sync(writer);
+
+		rsval = bitval_read_int8(reader);
+		wsval = bitval_read_int8(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_int16(reader);
+		wsval = bitval_read_int16(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_int16(reader);
+		wsval = bitval_read_int16(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_int8(reader);
+		wsval = bitval_read_int8(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_int32(reader);
+		wsval = bitval_read_int32(writer);
+		assert(rsval == wsval);
+
+		ruval = bitval_read_uint8(reader);
+		wuval = bitval_read_uint8(writer);
+		assert(ruval == wuval);
+
+		ruval = bitval_read_uint16(reader);
+		wuval = bitval_read_uint16(writer);
+		assert(ruval == wuval);
+
+		ruval = bitval_read_uint8(reader);
+		wuval = bitval_read_uint8(writer);
+		assert(ruval == wuval);
+
+		ruval = bitval_read_uint16(reader);
+		wuval = bitval_read_uint16(writer);
+		assert(ruval == wuval);
+
+		ruval = bitval_read_uint32(reader);
+		wuval = bitval_read_uint32(writer);
+		assert(ruval == wuval);
+
+		rsval = bitval_read_bigendian_int8(reader);
+		wsval = bitval_read_bigendian_int8(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_bigendian_int16(reader);
+		wsval = bitval_read_bigendian_int16(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_bigendian_int16(reader);
+		wsval = bitval_read_bigendian_int16(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_bigendian_int8(reader);
+		wsval = bitval_read_bigendian_int8(writer);
+		assert(rsval == wsval);
+
+		rsval = bitval_read_bigendian_int32(reader);
+		wsval = bitval_read_bigendian_int32(writer);
+		assert(rsval == wsval);
+
+		ruval = bitval_read_bigendian_uint8(reader);
+		wuval = bitval_read_bigendian_uint8(writer);
+		assert(ruval == wuval);
+
+		ruval = bitval_read_bigendian_uint16(reader);
+		wuval = bitval_read_bigendian_uint16(writer);
+		assert(ruval == wuval);
+
+		ruval = bitval_read_bigendian_uint16(reader);
+		wuval = bitval_read_bigendian_uint16(writer);
+		assert(ruval == wuval);
+
+		ruval = bitval_read_bigendian_uint8(reader);
+		wuval = bitval_read_bigendian_uint8(writer);
+		assert(ruval == wuval);
+
+		ruval = bitval_read_bigendian_uint32(reader);
+		wuval = bitval_read_bigendian_uint32(writer);
+		assert(ruval == wuval);
+	}
+	free(dst);
+}
+
 // bitval_test_string formula:
 //	bitval_read_string()		results[0]
 //	bitval_read_string()		results[1]
@@ -277,7 +548,7 @@ bitval_test_string(const char *name, const char *data, size_t size, const char *
 	snprintf(head, sizeof(head), "bitval_test_string[%s]", name);
 
 	bitval_t b, b1;
-	bitval_init(b, (byte_t*)data, size);
+	bitval_init_read(b, (byte_t*)data, size);
 	bitval_copy(b1, b);
 
 	const char *str;
@@ -287,21 +558,21 @@ bitval_test_string(const char *name, const char *data, size_t size, const char *
 	str = bitval_read_string(b, &len);
 	string_compare(head, "read", str, len, 0, cmp);
 	bitval_skip_string(b1);
-	assert(bitval_cursor(b) == bitval_cursor(b1));
+	assert(bitval_read_cursor(b) == bitval_read_cursor(b1));
 
 	str = bitval_peek_string(b1, &len);
 	string_compare(head, "peek", str, len, 1, cmp);
 	str = bitval_read_string(b1, &len);
 	string_compare(head, "read", str, len, 1, cmp);
 	bitval_skip_string(b);
-	assert(bitval_cursor(b) == bitval_cursor(b1));
+	assert(bitval_read_cursor(b) == bitval_read_cursor(b1));
 
 	str = bitval_peek_string(b, &len);
 	string_compare(head, "peek", str, len, 2, cmp);
 	str = bitval_read_string(b, &len);
 	string_compare(head, "read", str, len, 2, cmp);
 	bitval_skip_string(b1);
-	assert(bitval_cursor(b) == bitval_cursor(b1));
+	assert(bitval_read_cursor(b) == bitval_read_cursor(b1));
 }
 
 int
@@ -312,5 +583,6 @@ main(void) {
 	bitval_test_integer("integer_data", g_integer_data, sizeof(g_integer_data), g_integer_data_results);
 	bitval_test_integer("integer_data1", g_integer_data1, sizeof(g_integer_data1), g_integer_data1_results);
 	bitval_test_string("string_data", g_string_data, sizeof(g_string_data), g_string_data_results);
+	bitval_test_write("integer_data", g_integer_data, sizeof(g_integer_data));
 	return 0;
 }

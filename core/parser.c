@@ -161,7 +161,7 @@ parser_delete_dictionary(struct parser *px, struct dictionary *dc) {
 static void
 DefineShape(struct stream *stm, enum swftag tag, const uint8_t *pos, size_t len) {
 	bitval_t bv;
-	bitval_init(bv, (byte_t*)pos, len);
+	bitval_init_read(bv, (byte_t*)pos, len);
 	uintreg_t id = bitval_read_uint16(bv);
 	struct character *ch = parser_malloc_character(stm->pxface->parser);
 	struct rectangle *rt = parser_malloc_rectangle(stm->pxface->parser, 1);
@@ -170,7 +170,7 @@ DefineShape(struct stream *stm, enum swftag tag, const uint8_t *pos, size_t len)
 	dictionary_add_char(stm->dictionary, id, ch);
 	ch->id = id;
 	ch->tag = tag;
-	ch->data = (uintptr_t)bitval_cursor(bv);
+	ch->data = (uintptr_t)bitval_read_cursor(bv);
 	ch->udef = (uintptr_t)rt;
 }
 
@@ -184,11 +184,11 @@ PlaceObject(struct sprite *si, struct stream *stm, const uint8_t *pos, size_t le
 	pi.stepratio = 0;
 
 	bitval_t bv;
-	bitval_init(bv, (byte_t*)(pos+4), len-4);
+	bitval_init_read(bv, (byte_t*)(pos+4), len-4);
 	bitval_read_matrix(bv, &pi.transform.matrix);
 	bitval_sync(bv);
 	cxform_identify(&pi.transform.cxform);
-	if (bitval_number_bytes(bv) > 0) {
+	if (bitval_remain_bytes(bv) > 0) {
 		bitval_read_cxform_without_alpha(bv, &pi.transform.cxform);
 	}
 	sprite_place_object(si, &pi);
@@ -197,7 +197,7 @@ PlaceObject(struct sprite *si, struct stream *stm, const uint8_t *pos, size_t le
 static void
 PlaceObject2(struct sprite *si, struct stream *stm, const uint8_t *pos, size_t len) {
 	bitval_t bv;
-	bitval_init(bv, (byte_t*)pos, len);
+	bitval_init_read(bv, (byte_t*)pos, len);
 
 	struct place_info pi;
 	uintreg_t flag = pi.flag = bitval_read_uint8(bv);
@@ -262,11 +262,11 @@ static uintptr_t
 parser_progress_frame(struct parser *px, struct stream *stm, struct sprite *si, uintptr_t tagpos) {
 	(void)px;
 	bitval_t bv;
-	bitval_init(bv, (byte_t*)tagpos, (size_t)-1);
+	bitval_init_read(bv, (byte_t*)tagpos, (size_t)-1);
 	for (;;) {
 		size_t len;
 		enum swftag tag = bitval_read_swftag(bv, &len);
-		void *pos = (void *)bitval_cursor(bv);
+		void *pos = (void *)bitval_read_cursor(bv);
 		switch (tag) {
 		case SwftagEnd:
 		case SwftagShowFrame:
@@ -309,7 +309,7 @@ parser_struct_stream(struct parser *px, struct stream *stm, const void *ud, stru
 	assert(memcmp(ud, "FWS", 3) == 0);
 
 	bitval_t bv;
-	bitval_init(bv, (byte_t*)ud, (size_t)-1);
+	bitval_init_read(bv, (byte_t*)ud, (size_t)-1);
 	bitval_skip_bytes(bv, 3);
 	stm->version = bitval_read_uint8(bv);
 	stm->resource = (uintptr_t)ud;
@@ -320,7 +320,7 @@ parser_struct_stream(struct parser *px, struct stream *stm, const void *ud, stru
 	bitval_sync(bv);
 	def->rate = bitval_read_uint16(bv);
 	def->nframe = bitval_read_uint16(bv);
-	def->tagbeg = (uintptr_t)bitval_cursor(bv);
+	def->tagbeg = (uintptr_t)bitval_read_cursor(bv);
 }
 
 static void
@@ -845,7 +845,7 @@ parser_struct_graph(struct parser *px, struct stream *stm, struct render *rd, co
 		state_init_change(&st, &gh, tsm, ch->tag);
 	}
 	bitval_t bv;
-	bitval_init(bv, (byte_t*)ch->data, (size_t)-1);
+	bitval_init_read(bv, (byte_t*)ch->data, (size_t)-1);
 	parser_struct_palette(px, rd, bv, &st);
 	parser_struct_texture(px, rd, bv, &st);
 	*in = gh;
@@ -860,7 +860,7 @@ parser_change_graph(struct parser *px, struct stream *stm, struct render *rd, co
 	struct state st;
 	state_init_change(&st, gh, tsm, ch->tag);
 	bitval_t bv;
-	bitval_init(bv, (byte_t*)ch->data, (size_t)-1);
+	bitval_init_read(bv, (byte_t*)ch->data, (size_t)-1);
 	parser_struct_palette(px, rd, bv, &st);
 	parser_search_palette(px, rd, bv, &st);
 	return gh;

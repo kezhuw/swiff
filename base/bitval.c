@@ -134,6 +134,43 @@ bitval_flush_write(struct bitval *bv) {
 }
 
 void
+bitval_zero_bits(struct bitval *bv, size_t n) {
+	AssertNbits(bv, n);
+	if (bv->num != sizeof(buffer_t)*8) {
+		size_t wrt = sizeof(buffer_t)*8 - bv->num;
+		if (n < wrt) {
+			wrt = n;
+		}
+		bv->num += wrt;
+		n -= wrt;
+	}
+	if (n > 0) {
+		assert(bv->num == sizeof(buffer_t)*8);
+		bitval_flush_write(bv);
+		byte_t *ptr = (byte_t*)bv->ptr;
+		size_t nb = n/8;
+		size_t nf = n&0x07;
+		bv->ptr += nb;
+		bv->num = nf;
+		switch (nb) {
+		case 4:
+			ptr[3] = 0;
+		case 3:
+			ptr[2] = 0;
+		case 2:
+			ptr[1] = 0;
+		case 1:
+			ptr[0] = 0;
+		case 0:
+			break;
+		default:
+			memset(ptr, 0, nb);
+			break;
+		}
+	}
+}
+
+void
 bitval_write_ubits(struct bitval *bv, uintreg_t val, size_t n) {
 	assert(sizeof(buffer_t) >= sizeof(uintreg_t));
 	buffer_t v = ((buffer_t)val) << (sizeof(buffer_t)*8 - n);
