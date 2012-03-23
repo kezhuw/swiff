@@ -26,13 +26,13 @@ typedef uintreg_t number_t;
 typedef uint8_t byte_t;
 
 // XXX Export only for declaration.
-struct bitval {
+typedef struct bitval {
 	buffer_t buf;		// Valid bits are the highest bits.
 	number_t num;		// Number of valid bits in buf.
 	const byte_t *ptr;
 	const byte_t *beg;
 	size_t len;
-};
+} bitval_t[1];
 
 // API {
 
