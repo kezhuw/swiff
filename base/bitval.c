@@ -103,18 +103,33 @@ bitval_meter_nbits(uintreg_t val) {
 
 void
 bitval_flush_write(struct bitval *bv) {
-	size_t num = (bv->num+7) & ~0x07;
-	assert(num%8 == 0);
+	size_t num = bv->num;
 	if (num != 0) {
+		num = (num+7)/8;
 		buffer_t buf = bv->buf;
 		uint8_t *ptr = (void*)bv->ptr;
-		do {
-			*ptr++ = (uint8_t)(buf >> (sizeof(buffer_t)*8 - 8));
-			num -= 8;
-		} while (num != 0);
 		bv->buf = 0;
 		bv->num = 0;
-		bv->ptr = (byte_t*)ptr;
+		bv->ptr += num;
+		switch (num) {
+		case 4:
+			ptr[3] = (uint8_t)(buf >> (sizeof(buffer_t)*8 - 32));
+		case 3:
+			ptr[2] = (uint8_t)(buf >> (sizeof(buffer_t)*8 - 24));
+		case 2:
+			ptr[1] = (uint8_t)(buf >> (sizeof(buffer_t)*8 - 16));
+		case 1:
+			ptr[0] = (uint8_t)(buf >> (sizeof(buffer_t)*8 - 8));
+		case 0:
+			break;
+		default:
+			do {
+				*ptr++ = (uint8_t)(buf >> (sizeof(buffer_t)*8 - 8));
+				num --;
+				buf <<= 8;
+			} while (num != 0);
+			break;
+		}
 	}
 }
 
