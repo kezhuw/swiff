@@ -114,7 +114,7 @@ bitval_flush_write(struct bitval *bv) {
 		} while (num != 0);
 		bv->buf = 0;
 		bv->num = 0;
-		bv->ptr = ptr;
+		bv->ptr = (byte_t*)ptr;
 	}
 }
 
@@ -193,10 +193,10 @@ bitval_read_string(struct bitval *bv, size_t *lenp) {
 	assert(bitval_synced(bv));
 	char *end = memchr(bv->ptr, '\0', bitval_remain_bytes(bv));
 	if (end != NULL) {
-		*lenp = (size_t)(end - (char *)bv->ptr);
+		*lenp = (size_t)(end - (char*)bv->ptr);
 
-		char *str = (char *)bv->ptr;
-		bv->ptr = (uint8_t *)end+1;
+		char *str = (char*)bv->ptr;
+		bv->ptr = (byte_t*)end+1;
 		return str;
 	}
 	return NULL;

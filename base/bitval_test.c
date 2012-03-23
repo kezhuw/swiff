@@ -71,7 +71,7 @@ bitval_test_integer(const char *name, const uint8_t *data, size_t size, uint32_t
 
 	uint32_t val, n;
 	struct bitval b[1];
-	bitval_init(b, data, size);
+	bitval_init(b, (byte_t*)data, size);
 	assert(bitval_ensure_bytes(b, size));
 
 	val = (uint32_t)bitval_peek_bit(b);
@@ -277,7 +277,7 @@ bitval_test_string(const char *name, const char *data, size_t size, const char *
 	snprintf(head, sizeof(head), "bitval_test_string[%s]", name);
 
 	struct bitval b[1], b1[1];
-	bitval_init(b, data, size);
+	bitval_init(b, (byte_t*)data, size);
 	bitval_copy(b1, b);
 
 	const char *str;

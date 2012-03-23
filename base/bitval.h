@@ -23,38 +23,38 @@ typedef uintreg_t number_t;
 
 #define ARITHMETIC_SHIFT_RIGHT
 
+typedef uint8_t byte_t;
+
 // XXX Export only for declaration.
 struct bitval {
 	buffer_t buf;		// Valid bits are the highest bits.
 	number_t num;		// Number of valid bits in buf.
-	const uint8_t *ptr;
-	const uint8_t *beg;
-	size_t cnt;
+	const byte_t *ptr;
+	const byte_t *beg;
+	size_t len;
 };
 
 // API {
 
 // Convenient functions {
-static inline intreg_t read_int8(const void *p);
-static inline intreg_t read_int16(const void *p);
-static inline intreg_t read_int32(const void *p);
+static inline intreg_t read_int8(const byte_t *src);
+static inline intreg_t read_int16(const byte_t *src);
+static inline intreg_t read_int32(const byte_t *src);
 
-static inline uintreg_t read_uint8(const void *p);
-static inline uintreg_t read_uint16(const void *p);
-static inline uintreg_t read_uint32(const void *p);
+static inline uintreg_t read_uint8(const byte_t *src);
+static inline uintreg_t read_uint16(const byte_t *src);
+static inline uintreg_t read_uint32(const byte_t *src);
 
-static inline intreg_t read_bigendian_int8(const void *p);
-static inline intreg_t read_bigendian_int16(const void *p);
-static inline intreg_t read_bigendian_int32(const void *p);
+static inline intreg_t read_bigendian_int8(const byte_t *src);
+static inline intreg_t read_bigendian_int16(const byte_t *src);
+static inline intreg_t read_bigendian_int32(const byte_t *src);
 
-static inline uintreg_t read_bigendian_uint8(const void *p);
-static inline uintreg_t read_bigendian_uint16(const void *p);
-static inline uintreg_t read_bigendian_uint32(const void *p);
+static inline uintreg_t read_bigendian_uint8(const byte_t *src);
+static inline uintreg_t read_bigendian_uint16(const byte_t *src);
+static inline uintreg_t read_bigendian_uint32(const byte_t *src);
 // }
 
-typedef void byte_t;
-
-static inline void bitval_init(struct bitval *bv, const byte_t *data, size_t size);
+static inline void bitval_init(struct bitval *bv, const byte_t *src, size_t len);
 static inline void bitval_copy(struct bitval *bv, const struct bitval *src);
 
 static inline void bitval_sync(struct bitval *bv);
@@ -62,7 +62,7 @@ static inline bool bitval_synced(const struct bitval *bv);
 
 // Return current reading position.
 // Caller may need to sync bv.
-static inline const void *bitval_cursor(const struct bitval *bv);
+static inline const byte_t *bitval_cursor(const struct bitval *bv);
 
 void bitval_skip_bits(struct bitval *bv, size_t n);
 static inline void bitval_skip_bytes(struct bitval *bv, size_t n);
@@ -109,87 +109,87 @@ void bitval_flush_write(struct bitval *bv);
 // }
 
 static inline intreg_t
-read_int8(const void *p) {
-	const int8_t *s = p;
+read_int8(const byte_t *src) {
+	const int8_t *s = (void*)src;
 	return s[0];
 }
 
 static inline intreg_t
-read_int16(const void *p) {
-	const uint8_t *u = p;
-	const int8_t *s = p;
+read_int16(const byte_t *src) {
+	const uint8_t *u = (void*)src;
+	const int8_t *s = (void*)src;
 	return (u[0] | (s[1]<<8));
 }
 
 static inline intreg_t
-read_int32(const void *p) {
-	const uint8_t *u = p;
-	const int8_t *s = p;
+read_int32(const byte_t *src) {
+	const uint8_t *u = (void*)src;
+	const int8_t *s = (void*)src;
 	return (u[0] | (u[1]<<8) | (u[2]<<16) | (s[3]<<24));
 }
 
 static inline uintreg_t
-read_uint8(const void *p) {
-	return ((uint8_t *)p)[0];
+read_uint8(const byte_t *src) {
+	return ((uint8_t *)src)[0];
 }
 
 static inline uintreg_t
-read_uint16(const void *p) {
-	const uint8_t *u = p;
+read_uint16(const byte_t *src) {
+	const uint8_t *u = (void*)src;
 	return (u[0] | (u[1] << 8));
 }
 
 static inline uintreg_t
-read_uint32(const void *p) {
-	const uint8_t *u = p;
+read_uint32(const byte_t *src) {
+	const uint8_t *u = (void*)src;
 	return (u[0] | (u[1]<<8) | (u[2]<<16) | (u[3]<<24));
 }
 
 static inline intreg_t
-read_bigendian_int8(const void *p) {
-	const int8_t *s = p;
+read_bigendian_int8(const byte_t *src) {
+	const int8_t *s = (void*)src;
 	return s[0];
 }
 
 static inline intreg_t
-read_bigendian_int16(const void *p) {
-	const uint8_t *u = p;
-	const int8_t *s = p;
+read_bigendian_int16(const byte_t *src) {
+	const uint8_t *u = (void*)src;
+	const int8_t *s = (void*)src;
 	return ((s[0]<<8) | u[1]);
 }
 
 static inline intreg_t
-read_bigendian_int32(const void *p) {
-	const uint8_t *u = p;
-	const int8_t *s = p;
+read_bigendian_int32(const byte_t *src) {
+	const uint8_t *u = (void*)src;
+	const int8_t *s = (void*)src;
 	return ((s[0]<<24) | (u[1]<<16) | (u[2]<<8) | u[3]);
 }
 
 static inline uintreg_t
-read_bigendian_uint8(const void *p) {
-	const uint8_t *u = p;
+read_bigendian_uint8(const byte_t *src) {
+	const uint8_t *u = (void*)src;
 	return u[0];
 }
 
 static inline uintreg_t
-read_bigendian_uint16(const void *p) {
-	const uint8_t *u = p;
+read_bigendian_uint16(const byte_t *src) {
+	const uint8_t *u = (void*)src;
 	return ((u[0]<<8) | u[1]);
 }
 
 static inline uintreg_t
-read_bigendian_uint32(const void *p) {
-	const uint8_t *u = p;
+read_bigendian_uint32(const byte_t *src) {
+	const uint8_t *u = (void*)src;
 	return ((u[0]<<24) | (u[1]<<16) | (u[2]<<8) | u[3]);
 }
 
 static inline void
-bitval_init(struct bitval *bv, const void *data, size_t size) {
+bitval_init(struct bitval *bv, const byte_t *src, size_t len) {
 	assert(sizeof(intreg_t) >= 4);
-	assert(bv != NULL && data != NULL && size != 0);
+	assert(bv != NULL && src != NULL && len != 0);
 	bv->buf = bv->num = 0;
-	bv->beg = bv->ptr = data;
-	bv->cnt = size;
+	bv->beg = bv->ptr = src;
+	bv->len = len;
 }
 
 static inline void
@@ -197,7 +197,7 @@ bitval_copy(struct bitval *bv, const struct bitval *src) {
 	*bv = *src;
 }
 
-static inline const void *
+static inline const byte_t *
 bitval_cursor(const struct bitval *bv) {
 	assert(bv != NULL);
 	return bv->ptr;
@@ -227,7 +227,7 @@ bitval_ensure_bound(const struct bitval *bv, long n) {
 
 static inline size_t
 bitval_remain_bytes(const struct bitval *bv) {
-	return (bv->cnt - (size_t)(bv->ptr-bv->beg));
+	return (bv->len - (size_t)(bv->ptr-bv->beg));
 }
 
 static inline size_t
